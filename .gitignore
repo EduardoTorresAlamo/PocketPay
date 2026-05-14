@@ -1,0 +1,32 @@
+# Xcode
+*.xcuserstate
+xcuserdata/
+DerivedData/
+*.xccheckout
+*.moved-aside
+*.pbxuser
+
+# Build artifacts
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
