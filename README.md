@@ -6,6 +6,19 @@ Targets iOS 17+.
 
 ---
 
+## ⚠️ Production Setup
+
+By default the app runs in **mock mode** — no real payments occur. To process live transactions:
+
+- Payment intents must be created on a **backend server** (never in client code). The secret key (`sk_test_...`) must never ship in the iOS binary.
+- Add your Stripe publishable key to `PocketPay/Config/APIKeys.swift`.
+- Point `APIKeys.backendURL` at your server endpoint.
+- Set `APIKeys.useMockPayments = false`.
+
+For development and evaluation, mock mode is sufficient and recommended.
+
+---
+
 ## Stack
 
 - SwiftUI (iOS 17+)
@@ -18,7 +31,7 @@ Targets iOS 17+.
 
 ## Features
 
-- **Authentication** — login with username/password or biometrics
+- **Authentication** — login with username/password or biometrics. Face ID / Touch ID failures fall back to device passcode automatically via `LocalAuthentication`.
 - **Home dashboard** — balance card with show/hide toggle, recent transactions
 - **P2P transfer** — contact search, custom numeric keypad, optional transfer note
 - **Transaction history** — full list, filterable by type (P2P, business, donation, transfer), grouped by date
