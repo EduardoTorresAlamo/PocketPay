@@ -1,6 +1,6 @@
 # PocketPay
 
-iOS P2P mobile payments app built with SwiftUI. Supports biometric authentication, a custom numeric keypad for transfers, transaction history with filters, and Stripe payment processing. Mock mode is on by default — no Stripe account needed to run the app.
+iOS P2P mobile payments app built with SwiftUI. Supports biometric authentication, a custom numeric keypad for transfers, transaction history with filters, and Stripe payment processing. Mock mode is on by default, so no Stripe account is needed to run the app.
 
 Targets iOS 17+.
 
@@ -8,7 +8,7 @@ Targets iOS 17+.
 
 ## ⚠️ Production Setup
 
-By default the app runs in **mock mode** — no real payments occur. To process live transactions:
+By default the app runs in **mock mode**: no real payments occur. To process live transactions:
 
 - Payment intents must be created on a **backend server** (never in client code). The secret key (`sk_test_...`) must never ship in the iOS binary.
 - Add your Stripe publishable key to `PocketPay/Config/APIKeys.swift`.
@@ -24,19 +24,19 @@ For development and evaluation, mock mode is sufficient and recommended.
 - SwiftUI (iOS 17+)
 - MVVM architecture
 - LocalAuthentication (Face ID / Touch ID)
-- Stripe iOS SDK (optional — mock mode available)
+- Stripe iOS SDK (optional; mock mode available)
 - SF Symbols, no third-party UI dependencies
 
 ---
 
 ## Features
 
-- **Authentication** — login with username/password or biometrics. Face ID / Touch ID failures fall back to device passcode automatically via `LocalAuthentication`.
-- **Home dashboard** — balance card with show/hide toggle, recent transactions
-- **P2P transfer** — contact search, custom numeric keypad, optional transfer note
-- **Transaction history** — full list, filterable by type (P2P, business, donation, transfer), grouped by date
-- **Wallet** — payment method management
-- **Mock data** — contacts, users, and transactions are all pre-seeded; no backend required
+- **Authentication**: login with username/password or biometrics. Face ID / Touch ID failures fall back to device passcode automatically via `LocalAuthentication`.
+- **Home dashboard**: balance card with show/hide toggle, recent transactions
+- **P2P transfer**: contact search, custom numeric keypad, optional transfer note
+- **Transaction history**: full list, filterable by type (P2P, business, donation, transfer), grouped by date
+- **Wallet**: payment method management
+- **Mock data**: contacts, users, and transactions are all pre-seeded; no backend required
 
 ---
 
