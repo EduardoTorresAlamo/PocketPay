@@ -7,6 +7,16 @@
 
 import SwiftUI
 
+/// Placeholder view for the QR code scanning feature.
+///
+/// The view renders a dark camera-style background with a scanner frame and
+/// four decorative `ScannerCorner` overlays to mimic a real QR viewfinder.
+/// A "Feature Coming Soon" badge at the bottom communicates that AVFoundation
+/// camera capture is not yet implemented in this version.
+///
+/// When the feature is built out, replace the overlay content with an
+/// `AVCaptureVideoPreviewLayer` via `UIViewRepresentable` and hook the
+/// `AVCaptureMetadataOutput` delegate to decode QR payloads.
 struct ScanQRView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -97,6 +107,11 @@ struct ScanQRView: View {
 
 // MARK: - Scanner Corner
 
+/// A single L-shaped corner accent used in the QR scanner frame overlay.
+///
+/// Four instances are placed at each corner of the 250x250 scanner square and
+/// rotated 0, 90, -90, and 180 degrees respectively to complete the frame look.
+/// The default orientation points toward the top-left corner.
 struct ScannerCorner: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

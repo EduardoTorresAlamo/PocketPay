@@ -7,17 +7,38 @@
 
 import SwiftUI
 
+/// Sheet form for adding a new credit or debit card to the user's wallet.
+///
+/// As the user types, a `CardPreview` at the top of the scroll view updates in
+/// real time to reflect the entered card number (last 4 digits), expiry, holder name,
+/// brand icon, and selected color theme.
+///
+/// Full card numbers are never persisted; only the last 4 digits are stored in
+/// the `PaymentMethod` model. In a production Stripe integration, the full number
+/// would be tokenized client-side by the Stripe SDK before the token is sent to
+/// the backend, and the raw PAN would never touch your servers.
+///
+/// Input formatters truncate values to their maximum lengths:
+/// - Card number: 16 digits displayed as groups of 4 (`XXXX XXXX XXXX XXXX`)
+/// - Expiry month: 2 digits, clamped to 12
+/// - Expiry year: 2 digits
+/// - CVV: 3-4 digits (4 for Amex)
 struct AddCardView: View {
     @ObservedObject var viewModel: WalletViewModel
     @Environment(\.dismiss) private var dismiss
 
+    /// Raw card number string managed by `formatCardNumber` as the user types.
     @State private var cardNumber = ""
     @State private var cardHolderName = ""
+    /// Two-digit expiry month (`"01"` through `"12"`).
     @State private var expiryMonth = ""
+    /// Two-digit expiry year (`"26"`, etc.).
     @State private var expiryYear = ""
+    /// 3 or 4-digit card verification value (never persisted).
     @State private var cvv = ""
     @State private var selectedBrand: CardBrand = .visa
     @State private var selectedColor: CardColorTheme = .purple
+    /// When `true`, this card becomes the wallet default on save.
     @State private var setAsDefault = false
     @State private var showingError = false
     @State private var errorMessage = ""
@@ -212,6 +233,9 @@ struct AddCardView: View {
         }
     }
 
+    /// The last 4 digits of `cardNumber`, used for `CardPreview` and `PaymentMethod` storage.
+    ///
+    /// Falls back to `"****"` while fewer than 4 digits have been entered.
     private var last4Digits: String {
         let digits = cardNumber.replacingOccurrences(of: " ", with: "")
         if digits.count >= 4 {
@@ -220,6 +244,9 @@ struct AddCardView: View {
         return "****"
     }
 
+    /// The expiry string in `"MM/YY"` format shown on the card preview.
+    ///
+    /// Returns the placeholder `"MM/YY"` until both month and year fields are filled.
     private var formattedExpiry: String {
         if !expiryMonth.isEmpty && !expiryYear.isEmpty {
             return "\(expiryMonth)/\(expiryYear)"
@@ -227,6 +254,10 @@ struct AddCardView: View {
         return "MM/YY"
     }
 
+    /// `true` when all required fields contain valid values and the form can be submitted.
+    ///
+    /// Requires at least 15 digits (Amex uses 15-digit PANs), a non-empty holder name,
+    /// two-digit month and year, and at least 3 CVV digits.
     private var isFormValid: Bool {
         let digits = cardNumber.replacingOccurrences(of: " ", with: "")
         return digits.count >= 15 &&
@@ -236,12 +267,19 @@ struct AddCardView: View {
                cvv.count >= 3
     }
 
+    /// Strips non-digit characters and inserts a space every 4 digits.
+    ///
+    /// Caps input at 16 digits to fit standard card PANs.
+    ///
+    /// - Parameter input: Raw string from the card number text field.
+    /// - Returns: Formatted string such as `"4111 1111 1111 1111"`.
     private func formatCardNumber(_ input: String) -> String {
         let digits = input.replacingOccurrences(of: " ", with: "")
         let limited = String(digits.prefix(16))
         var formatted = ""
 
         for (index, char) in limited.enumerated() {
+            // Insert a space before every 4th digit group to match physical card formatting.
             if index > 0 && index % 4 == 0 {
                 formatted += " "
             }
@@ -251,10 +289,15 @@ struct AddCardView: View {
         return formatted
     }
 
+    /// Strips non-digit characters from the month field and clamps the value to `"12"`.
+    ///
+    /// - Parameter input: Raw string from the month text field.
+    /// - Returns: Up to 2 digit characters, never exceeding `"12"`.
     private func formatMonth(_ input: String) -> String {
         let digits = input.filter { $0.isNumber }
         let limited = String(digits.prefix(2))
 
+        // Prevent the user from entering an invalid month like "13" or "99".
         if let month = Int(limited), month > 12 {
             return "12"
         }
@@ -262,16 +305,31 @@ struct AddCardView: View {
         return limited
     }
 
+    /// Strips non-digit characters and caps input at 2 characters for the year field.
+    ///
+    /// - Parameter input: Raw string from the year text field.
+    /// - Returns: Up to 2 digit characters (e.g., `"26"`).
     private func formatYear(_ input: String) -> String {
         let digits = input.filter { $0.isNumber }
         return String(digits.prefix(2))
     }
 
+    /// Strips non-digit characters and caps the CVV at 4 digits.
+    ///
+    /// Most cards use 3-digit CVVs; American Express uses 4 digits.
+    ///
+    /// - Parameter input: Raw string from the CVV text field.
+    /// - Returns: Up to 4 digit characters.
     private func formatCVV(_ input: String) -> String {
         let digits = input.filter { $0.isNumber }
         return String(digits.prefix(4))
     }
 
+    /// Builds a `PaymentMethod` from the current form state and adds it to the wallet.
+    ///
+    /// The new card is automatically made the default if the wallet is empty or if
+    /// `setAsDefault` is toggled on. `WalletViewModel.addPaymentMethod` enforces
+    /// the single-default invariant for the remaining cards.
     private func addCard() {
         let newCard = PaymentMethod(
             cardBrand: selectedBrand,
@@ -279,6 +337,7 @@ struct AddCardView: View {
             expiryDate: formattedExpiry,
             cardHolderName: cardHolderName,
             colorTheme: selectedColor,
+            // Auto-set as default if it is the very first card or explicitly requested.
             isDefault: setAsDefault || viewModel.paymentMethods.isEmpty
         )
 
@@ -289,11 +348,21 @@ struct AddCardView: View {
 
 // MARK: - Card Preview
 
+/// A live card artwork preview shown at the top of `AddCardView`.
+///
+/// Mirrors the layout of `CreditCardView` from `WalletView`, but is driven by
+/// individual field properties rather than a `PaymentMethod` model so it can
+/// update incrementally as each form field is filled.
 struct CardPreview: View {
+    /// The selected card network, used to pick the brand SF Symbol.
     let brand: CardBrand
+    /// Last 4 digits of the entered card number, or `"****"` while incomplete.
     let last4: String
+    /// Expiry string in `"MM/YY"` format, or `"MM/YY"` placeholder.
     let expiry: String
+    /// Uppercased cardholder name, or `"CARDHOLDER NAME"` placeholder.
     let holder: String
+    /// Visual gradient theme applied to the card background.
     let colorTheme: CardColorTheme
 
     var body: some View {

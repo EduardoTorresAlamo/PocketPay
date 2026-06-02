@@ -7,6 +7,14 @@
 
 import SwiftUI
 
+/// The full P2P money-transfer flow presented as a sheet from `HomeView`.
+///
+/// The view is stateless and delegates all logic to `TransferViewModel`. It
+/// switches between two sub-views based on whether a contact has been selected:
+/// - `ContactSelectionView` (Phase 1): search and pick a recipient.
+/// - `AmountInputView` (Phase 2): enter an amount on the custom keypad and send.
+///
+/// A semi-transparent loading overlay appears while the payment is in flight.
 struct TransferView: View {
     @StateObject private var viewModel = TransferViewModel()
     @Environment(\.dismiss) private var dismiss
@@ -73,6 +81,11 @@ struct TransferView: View {
 
 // MARK: - Contact Selection View
 
+/// Phase 1 of the transfer flow: a searchable contact list.
+///
+/// The search field filters by name or phone number via
+/// `TransferViewModel.searchContacts()`. Tapping a row calls
+/// `viewModel.selectContact(_:)` which advances to Phase 2.
 struct ContactSelectionView: View {
     @ObservedObject var viewModel: TransferViewModel
 
@@ -126,6 +139,8 @@ struct ContactSelectionView: View {
 
 // MARK: - Contact Row View
 
+/// A single row in the contact list, showing an avatar with initials,
+/// the contact's name, phone number, and a favorite star when applicable.
 struct ContactRowView: View {
     let contact: Contact
     let action: () -> Void
@@ -174,6 +189,11 @@ struct ContactRowView: View {
 
 // MARK: - Amount Input View
 
+/// Phase 2 of the transfer flow: amount entry via the custom numeric keypad.
+///
+/// Shows the selected contact's avatar and name at the top, the running
+/// formatted amount in large text, an optional notes field, and the keypad.
+/// The "Send Money" button remains disabled until `viewModel.canSendMoney()` is true.
 struct AmountInputView: View {
     @ObservedObject var viewModel: TransferViewModel
 
@@ -254,6 +274,13 @@ struct AmountInputView: View {
 
 // MARK: - Numeric Keypad View
 
+/// A 3x4 grid numeric keypad that drives the shift-register amount input.
+///
+/// Digits 1-9 are laid out in the top three rows. Row 4 contains:
+/// - A disabled decimal point (`.`): the amount always has two implied decimal places,
+///   so explicit decimal input is not needed.
+/// - The `0` key.
+/// - A backspace key (delete icon) that calls `viewModel.deleteLastDigit()`.
 struct NumericKeypadView: View {
     @ObservedObject var viewModel: TransferViewModel
 
@@ -289,12 +316,18 @@ struct NumericKeypadView: View {
 
 // MARK: - Keypad Button
 
+/// An individual button cell in `NumericKeypadView`.
+///
+/// Supports two initializers: one for text labels (digits) and one for SF Symbol
+/// icons (the backspace key). A `disabled` flag renders the button grayed-out and
+/// non-interactive; used for the decimal point key which is reserved but inactive.
 struct KeypadButton: View {
     let text: String?
     let icon: String?
     var disabled: Bool = false
     let action: () -> Void
 
+    /// Text-label initializer for digit keys.
     init(text: String, disabled: Bool = false, action: @escaping () -> Void) {
         self.text = text
         self.icon = nil
@@ -302,6 +335,7 @@ struct KeypadButton: View {
         self.action = action
     }
 
+    /// Icon initializer for the backspace key (uses an SF Symbol name).
     init(icon: String, disabled: Bool = false, action: @escaping () -> Void) {
         self.text = nil
         self.icon = icon

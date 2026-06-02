@@ -7,8 +7,16 @@
 
 import SwiftUI
 
+/// Displays the user's saved payment methods in a swipeable card carousel.
+///
+/// The top section shows a paginated `TabView` of `CreditCardView` items.
+/// Below the carousel, contextual action buttons (Set as Default, Remove) appear
+/// for the currently visible card. A list below mirrors all cards and allows
+/// direct selection by tapping a row. The "Add New Card" button presents `AddCardView`.
 struct WalletView: View {
     @StateObject private var viewModel = WalletViewModel.shared
+    /// Tracks which card is currently centered in the carousel, synchronized with
+    /// the list row selection highlight below.
     @State private var selectedCardIndex = 0
 
     var body: some View {
@@ -104,6 +112,10 @@ struct WalletView: View {
 
 // MARK: - Credit Card View
 
+/// Renders a physical-card-style view for a saved `PaymentMethod`.
+///
+/// Shows the card brand icon, a "DEFAULT" badge if applicable, the masked card
+/// number, cardholder name, and expiry date on a color-themed gradient background.
 struct CreditCardView: View {
     let paymentMethod: PaymentMethod
 
@@ -182,6 +194,7 @@ struct CreditCardView: View {
 
 // MARK: - Empty Wallet View
 
+/// Placeholder shown when the user has no saved payment methods.
 struct EmptyWalletView: View {
     var body: some View {
         VStack(spacing: 20) {
@@ -207,6 +220,10 @@ struct EmptyWalletView: View {
 
 // MARK: - Card Actions View
 
+/// Action buttons displayed below the card carousel for the currently selected card.
+///
+/// Shows "Set as Default" only when the card is not already the default.
+/// The "Remove" button triggers a confirmation alert before deleting.
 struct CardActionsView: View {
     let card: PaymentMethod
     let setAsDefaultAction: () -> Void
@@ -256,8 +273,13 @@ struct CardActionsView: View {
 
 // MARK: - Payment Method List Row
 
+/// A compact list row for a saved card, shown below the carousel in `WalletView`.
+///
+/// A purple border and checkmark indicate the currently selected card. Tapping
+/// the row syncs the carousel's `selectedCardIndex` to this card.
 struct PaymentMethodListRow: View {
     let paymentMethod: PaymentMethod
+    /// `true` when this row corresponds to the card currently shown in the carousel.
     let isSelected: Bool
     let selectAction: () -> Void
 

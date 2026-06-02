@@ -9,6 +9,11 @@ import Foundation
 import SwiftUI
 
 // MARK: - Payment Frequency
+
+/// How often a recurring payment repeats.
+///
+/// Used by `CalendarManager` to choose the correct `EKRecurrenceRule` and
+/// by `ServicesViewModel.totalMonthlyRecurring` to normalize amounts for display.
 enum PaymentFrequency: String, Codable, CaseIterable {
     case weekly = "Weekly"
     case biWeekly = "Bi-Weekly"
@@ -16,10 +21,12 @@ enum PaymentFrequency: String, Codable, CaseIterable {
     case quarterly = "Quarterly"
     case yearly = "Yearly"
 
+    /// Human-readable label shown in pickers and list rows.
     var displayName: String {
         return self.rawValue
     }
 
+    /// SF Symbol name used in frequency picker rows.
     var icon: String {
         switch self {
         case .weekly:
@@ -35,7 +42,11 @@ enum PaymentFrequency: String, Codable, CaseIterable {
         }
     }
 
-    // Calculate next payment date based on frequency
+    /// Computes the next occurrence of a payment based on this frequency.
+    ///
+    /// - Parameter date: The reference date (typically the most recent payment date).
+    /// - Returns: The next due date after `date`. Returns `date` unchanged if
+    ///   `Calendar.date(byAdding:)` fails (e.g., on an overflow date).
     func nextDate(from date: Date) -> Date {
         let calendar = Calendar.current
         switch self {
@@ -46,6 +57,7 @@ enum PaymentFrequency: String, Codable, CaseIterable {
         case .monthly:
             return calendar.date(byAdding: .month, value: 1, to: date) ?? date
         case .quarterly:
+            // Quarterly = every 3 months
             return calendar.date(byAdding: .month, value: 3, to: date) ?? date
         case .yearly:
             return calendar.date(byAdding: .year, value: 1, to: date) ?? date
@@ -54,16 +66,33 @@ enum PaymentFrequency: String, Codable, CaseIterable {
 }
 
 // MARK: - Recurring Payment Model
+
+/// A scheduled repeating payment such as rent, a subscription, or a utility bill.
+///
+/// `RecurringPayment` drives the Services tab. Each item tracks its schedule
+/// (`frequency`, `nextPaymentDate`), its status flags (`isActive`, `autoPayEnabled`),
+/// and links into `ServicesViewModel` for pay/toggle/delete actions.
 struct RecurringPayment: Identifiable, Codable {
+    /// Stable identifier used for list diffing and linking to `Transaction.recurringPaymentId`.
     let id: UUID
+    /// Display name of the biller shown in the Services list.
     var billerName: String
+    /// Amount due each payment cycle, in USD.
     var amount: Double
+    /// How often the payment recurs (weekly, monthly, etc.).
     var frequency: PaymentFrequency
+    /// Semantic category used for icon and color in the UI.
     var category: TransactionCategory
+    /// The date the next payment is due. Updated after each successful payment.
     var nextPaymentDate: Date
+    /// `false` when the user has paused this recurring payment.
     var isActive: Bool
+    /// Date of the most recent successful payment; `nil` if the payment has never been made.
     var lastPaymentDate: Date?
+    /// Optional user-supplied memo forwarded to each generated transaction.
     var notes: String?
+    /// When `true`, the payment will be processed automatically on `nextPaymentDate`
+    /// without requiring manual confirmation (not yet implemented; reserved for future use).
     var autoPayEnabled: Bool
 
     init(
@@ -90,16 +119,22 @@ struct RecurringPayment: Identifiable, Codable {
         self.autoPayEnabled = autoPayEnabled
     }
 
+    /// Amount formatted as a currency string, e.g., `"$125.50"`.
     var formattedAmount: String {
         return String(format: "$%.2f", amount)
     }
 
+    /// Next payment date formatted as `"Jan 5, 2026"`.
     var formattedNextPaymentDate: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d, yyyy"
         return formatter.string(from: nextPaymentDate)
     }
 
+    /// Number of calendar days between today and `nextPaymentDate`.
+    ///
+    /// Negative values indicate the payment is overdue. Uses `startOfDay` to
+    /// ignore time-of-day differences so a payment due "today" shows 0, not -1.
     var daysUntilNextPayment: Int {
         let calendar = Calendar.current
         let now = calendar.startOfDay(for: Date())
@@ -108,15 +143,18 @@ struct RecurringPayment: Identifiable, Codable {
         return components.day ?? 0
     }
 
+    /// `true` when the payment is due within the next 7 days (inclusive of today).
     var isDueSoon: Bool {
         let days = daysUntilNextPayment
         return days >= 0 && days <= 7 // Due within a week
     }
 
+    /// `true` when `nextPaymentDate` is in the past.
     var isOverdue: Bool {
         return daysUntilNextPayment < 0
     }
 
+    /// Color used for the status badge: red for overdue, orange for due soon, green otherwise.
     var statusColor: Color {
         if isOverdue {
             return AppConstants.Colors.errorRed
@@ -127,6 +165,7 @@ struct RecurringPayment: Identifiable, Codable {
         }
     }
 
+    /// Short human-readable status label shown on the payment card.
     var statusText: String {
         if !isActive {
             return "Inactive"

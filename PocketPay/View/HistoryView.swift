@@ -7,13 +7,23 @@
 
 import SwiftUI
 
+/// Shows the full transaction history grouped by date with category filtering.
+///
+/// A horizontal chip row at the top lets the user filter by `TransactionCategory`.
+/// Transactions are grouped into date sections (Today, Yesterday, or a full date)
+/// using `groupedTransactions`. Tapping a row presents `TransactionDetailView` as a sheet.
 struct HistoryView: View {
     @StateObject private var paymentManager = PaymentManager.shared
+    /// A fresh `ServicesViewModel` instance is created here so that
+    /// `TransactionDetailView` can access recurring payment data to display
+    /// frequency and next-payment info for linked transactions.
     @StateObject private var servicesViewModel = ServicesViewModel()
+    /// The active category filter. `nil` means "show all categories".
     @State private var selectedCategoryFilter: TransactionCategory? = nil
     @State private var selectedTransaction: Transaction? = nil
     @State private var showingTransactionDetail = false
 
+    /// Transactions filtered by the selected category, or all transactions if no filter is active.
     var filteredTransactions: [Transaction] {
         if let filter = selectedCategoryFilter {
             return paymentManager.transactions.filter { $0.category == filter }
@@ -123,13 +133,20 @@ struct HistoryView: View {
         }
     }
 
-    // Group transactions by date
+    /// Transactions bucketed by their calendar day (midnight-normalized `Date`).
+    ///
+    /// Using `startOfDay` strips the time component so all transactions on the
+    /// same date share the same dictionary key regardless of their exact timestamp.
     private var groupedTransactions: [Date: [Transaction]] {
         Dictionary(grouping: filteredTransactions) { transaction in
             Calendar.current.startOfDay(for: transaction.date)
         }
     }
 
+    /// Returns a human-friendly section header for a date bucket.
+    ///
+    /// - Parameter date: A midnight-normalized date from `groupedTransactions`.
+    /// - Returns: `"Today"`, `"Yesterday"`, or a full date string like `"January 5, 2026"`.
     private func formatSectionDate(_ date: Date) -> String {
         let calendar = Calendar.current
         if calendar.isDateInToday(date) {
@@ -146,6 +163,10 @@ struct HistoryView: View {
 
 // MARK: - Category Filter Chip
 
+/// A pill-shaped filter button in the horizontal chip row at the top of `HistoryView`.
+///
+/// The chip fills with `color` and turns its text white when `isSelected` is `true`;
+/// otherwise it appears with a card-background fill and primary text color.
 struct CategoryFilterChip: View {
     let title: String
     let icon: String
@@ -174,6 +195,11 @@ struct CategoryFilterChip: View {
 
 // MARK: - History Transaction Row
 
+/// A detailed transaction row shown in the history list.
+///
+/// Includes a category icon, recipient name, recurring indicator, category badge,
+/// date, optional notes preview, formatted amount, and a status badge.
+/// Tapping the row triggers `action` to open `TransactionDetailView`.
 struct HistoryTransactionRow: View {
     let transaction: Transaction
     let action: () -> Void
@@ -287,6 +313,9 @@ struct HistoryTransactionRow: View {
 
 // MARK: - History Status Badge
 
+/// A colored pill badge displaying a transaction's settlement status.
+///
+/// Colors: green for completed, orange for pending, red for failed.
 struct HistoryStatusBadge: View {
     let status: TransactionStatus
 

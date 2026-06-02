@@ -7,6 +7,11 @@
 
 import SwiftUI
 
+/// The Services tab that shows recurring bills, a monthly cost summary, and a "Due Soon" section.
+///
+/// Uses `ServicesViewModel` for all data and payment actions. The toolbar "+" button
+/// presents `AddPaymentView` as a sheet to add a new one-time or recurring payment.
+/// A full-screen loading overlay is shown while `viewModel.isProcessing` is `true`.
 struct ServicesView: View {
     @StateObject private var viewModel = ServicesViewModel()
     @State private var showingAddPayment = false
@@ -103,8 +108,13 @@ struct ServicesView: View {
 
 // MARK: - Summary Card
 
+/// A card at the top of the Services tab showing total monthly recurring cost
+/// and the number of payments due within the next 7 days.
 struct SummaryCard: View {
+    /// Total estimated monthly cost across all active recurring payments,
+    /// normalized to a monthly equivalent (see `ServicesViewModel.totalMonthlyRecurring`).
     let totalRecurring: Double
+    /// Number of active payments due within 7 days, shown with a warning icon.
     let dueCount: Int
 
     var body: some View {
@@ -151,8 +161,14 @@ struct SummaryCard: View {
 
 // MARK: - Due Payments Section
 
+/// A horizontally scrolling section that surfaces payments due within 7 days.
+///
+/// Each payment is rendered as a `DuePaymentCard`. This section is only shown
+/// when `ServicesViewModel.duePayments` is non-empty.
 struct DuePaymentsSection: View {
+    /// Payments that are active and due within the next 7 days.
     let payments: [RecurringPayment]
+    /// Closure called with the selected payment when the user taps "Pay Now".
     let payAction: (RecurringPayment) -> Void
 
     var body: some View {
@@ -176,8 +192,14 @@ struct DuePaymentsSection: View {
 
 // MARK: - Due Payment Card
 
+/// A fixed-width card in the horizontal "Due Soon" scroll view.
+///
+/// Shows the payment's category icon, status badge, biller name, amount,
+/// due date, and a "Pay Now" button that triggers immediate processing.
 struct DuePaymentCard: View {
+    /// The recurring payment displayed by this card.
     let payment: RecurringPayment
+    /// Closure invoked with `payment` when the user taps "Pay Now".
     let payAction: (RecurringPayment) -> Void
 
     var body: some View {
@@ -234,9 +256,15 @@ struct DuePaymentCard: View {
 
 // MARK: - Active Subscriptions Section
 
+/// The "All Services" section that lists every active recurring payment as a
+/// `RecurringPaymentRow`. Despite the name it is not limited to subscriptions;
+/// it shows all active categories (rent, utilities, subscriptions, general).
 struct ActiveSubscriptionsSection: View {
+    /// All currently active recurring payments.
     let payments: [RecurringPayment]
+    /// Closure invoked when the user taps the inline "Pay" button on a due-soon row.
     let payAction: (RecurringPayment) -> Void
+    /// Closure invoked when the user long-presses to toggle a payment's active state.
     let toggleAction: (RecurringPayment) -> Void
 
     var body: some View {
@@ -261,9 +289,17 @@ struct ActiveSubscriptionsSection: View {
 
 // MARK: - Recurring Payment Row
 
+/// A list row for a single recurring payment inside `ActiveSubscriptionsSection`.
+///
+/// Shows the biller icon, name, frequency, auto-pay badge, next due date,
+/// and amount. When `payment.isDueSoon`, an inline "Pay" button is shown
+/// so the user can act without navigating away.
 struct RecurringPaymentRow: View {
+    /// The recurring payment displayed in this row.
     let payment: RecurringPayment
+    /// Called when the user taps the inline "Pay" button.
     let payAction: (RecurringPayment) -> Void
+    /// Called when the user toggles the active state; currently wired to a context menu.
     let toggleAction: (RecurringPayment) -> Void
 
     var body: some View {
@@ -335,9 +371,16 @@ struct RecurringPaymentRow: View {
 
 // MARK: - Categories Section
 
+/// A 2-column grid of category shortcut cards at the bottom of the Services tab.
+///
+/// Tapping a card calls `selectedAction` with the corresponding category,
+/// which can be used to navigate to a pre-filtered payment or history view.
+/// Only the four main bill categories are shown (rent, utilities, subscription, general).
 struct CategoriesSection: View {
+    /// Closure called with the tapped category so the parent can act (e.g., navigate).
     let selectedAction: (TransactionCategory) -> Void
 
+    // Only bill-relevant categories are included; p2p is handled in TransferView.
     let categories: [TransactionCategory] = [.rent, .utilities, .subscription, .general]
 
     var body: some View {
@@ -359,8 +402,14 @@ struct CategoriesSection: View {
 
 // MARK: - Category Card
 
+/// A tappable card in `CategoriesSection` representing a single payment category.
+///
+/// Renders the category's SF Symbol icon in a colored rounded square above
+/// the category display name. Tapping forwards the category to `action`.
 struct CategoryCard: View {
+    /// The transaction category this card represents.
     let category: TransactionCategory
+    /// Called with `category` when the user taps the card.
     let action: (TransactionCategory) -> Void
 
     var body: some View {

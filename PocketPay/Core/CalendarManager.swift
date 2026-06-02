@@ -9,10 +9,20 @@ import Foundation
 import EventKit
 import Combine
 
+/// Manages EventKit calendar permissions and creates payment-related calendar events.
+///
+/// When a user enables "Add to Calendar" for a recurring payment, `CalendarManager`
+/// requests `EventKit` authorization and saves an `EKEvent` with a configurable
+/// reminder alarm to the user's default calendar. Events use `EKAlarm.relativeOffset`
+/// so reminders fire a specified number of days before each due date.
 class CalendarManager: ObservableObject {
+    /// Backing `EKEventStore` used for all EventKit read/write operations.
     private let eventStore = EKEventStore()
+    /// Reflects the current calendar authorization state so the UI can show
+    /// appropriate prompts or disabled states.
     @Published var authorizationStatus: EKAuthorizationStatus = .notDetermined
 
+    /// Shared singleton; `ServicesViewModel` calls into this instance.
     static let shared = CalendarManager()
 
     private init() {
@@ -25,6 +35,13 @@ class CalendarManager: ObservableObject {
         authorizationStatus = EKEventStore.authorizationStatus(for: .event)
     }
 
+    /// Prompts the user for full EventKit calendar access.
+    ///
+    /// Uses `requestFullAccessToEvents()` which requires the
+    /// `NSCalendarsFullAccessUsageDescription` key in `Info.plist`.
+    /// On iOS 17+ this method replaces the deprecated `requestAccess(to:)`.
+    ///
+    /// - Returns: `true` when the user granted access; `false` when denied or on error.
     func requestAccess() async -> Bool {
         print("📅 CalendarManager: Requesting calendar access...")
         do {
@@ -163,20 +180,24 @@ class CalendarManager: ObservableObject {
     // MARK: - Smart Reminder Creation
 
     /// Creates an EKAlarm with relative offset based on days before
-    /// - Parameter daysBefor: Number of days before event (1, 2, or 3)
-    /// - Returns: EKAlarm with relative offset
+    /// - Parameter daysBefore: Number of days before event (1, 2, or 3)
+    /// - Returns: EKAlarm with relative offset in seconds (negative = before the event)
     private func createSmartReminder(for daysBefore: Int) -> EKAlarm {
-        // Calculate offset in seconds (negative for before the event)
+        // Calculate offset in seconds (negative = fires before the event date).
         // 1 day = 86400 seconds
         let secondsOffset = TimeInterval(-daysBefore * 86400)
 
-        // Create alarm with relative offset
+        // EKAlarm.relativeOffset fires the alarm relative to the event's start date.
         let alarm = EKAlarm(relativeOffset: secondsOffset)
         return alarm
     }
 
     // MARK: - Recurrence Rules
 
+    /// Builds an `EKRecurrenceRule` matching the given `PaymentFrequency`.
+    ///
+    /// - Parameter frequency: How often the payment repeats.
+    /// - Returns: An `EKRecurrenceRule` with no end date (runs indefinitely).
     private func createRecurrenceRule(for frequency: PaymentFrequency) -> EKRecurrenceRule {
         switch frequency {
         case .weekly:
@@ -214,10 +235,13 @@ class CalendarManager: ObservableObject {
 
     // MARK: - Helper Methods
 
+    /// `true` when the app has been granted full calendar access by the user.
     var isAuthorized: Bool {
         authorizationStatus == .fullAccess || authorizationStatus == .authorized
     }
 
+    /// `true` when the authorization status indicates a permission prompt is required
+    /// (not yet asked) or access was previously denied.
     var needsPermission: Bool {
         authorizationStatus == .notDetermined || authorizationStatus == .denied
     }

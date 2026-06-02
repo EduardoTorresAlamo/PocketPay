@@ -7,6 +7,12 @@
 
 import SwiftUI
 
+/// The app's main home screen.
+///
+/// Displays a time-aware greeting, the current wallet balance (with a hide/show
+/// toggle), two primary action buttons, and a list of recent transactions.
+/// Both action buttons present sheets: `TransferView` for P2P sends and
+/// `AddPaymentView` for bill payments.
 struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @StateObject private var authManager = AuthManager.shared
@@ -132,9 +138,17 @@ struct HomeView: View {
 
 // MARK: - Balance Card (Updated, cleaner version)
 
+/// A gradient card displaying the user's available wallet balance.
+///
+/// The eye icon toggles between showing the formatted dollar amount and a
+/// masked string (`"••••••"`). The toggle state is owned by `HomeViewModel`
+/// so it persists across UI refreshes.
 struct BalanceCard: View {
+    /// Pre-formatted balance string (e.g., `"$1,250.00"`).
     let balance: String
+    /// When `true`, the balance is masked with dots.
     let isHidden: Bool
+    /// Called when the user taps the eye icon to reveal or hide the balance.
     let toggleAction: () -> Void
 
     var body: some View {
@@ -176,10 +190,16 @@ struct BalanceCard: View {
 
 // MARK: - Large Action Button
 
+/// A wide tappable card used for primary actions on the home screen.
+///
+/// Renders an icon circle on the left, a title/subtitle text block in the
+/// center, and a trailing chevron to signal interactivity.
 struct LargeActionButton: View {
     let title: String
     let subtitle: String
+    /// SF Symbol name for the icon displayed in the colored circle.
     let icon: String
+    /// Background color for the icon circle.
     let color: Color
     let action: () -> Void
 
@@ -219,6 +239,10 @@ struct LargeActionButton: View {
 
 // MARK: - Simple Transaction Row
 
+/// A compact transaction row used in the home screen's "Recent Transactions" list.
+///
+/// Shows a category icon circle, the recipient name and date, and the
+/// formatted amount. Incoming transactions are highlighted in green.
 struct SimpleTransactionRow: View {
     let transaction: Transaction
 

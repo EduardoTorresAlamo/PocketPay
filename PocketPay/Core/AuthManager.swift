@@ -9,11 +9,24 @@ import Foundation
 import Combine
 import LocalAuthentication
 
+/// Manages user identity and session state for the app.
+///
+/// `AuthManager` is a singleton that drives the root authentication gate in
+/// `PRPayApp`. It publishes `isAuthenticated` so the root view can reactively
+/// switch between `LoginView` and `MainTabView`.
+///
+/// Authentication strategies supported:
+/// - Username/password (mock implementation for demo; replace with a real API call in production)
+/// - Biometrics via `LocalAuthentication` (Face ID, Touch ID, or Optic ID depending on device)
 class AuthManager: ObservableObject {
+    /// Whether the user currently has an active session.
     @Published var isAuthenticated = false
+    /// The profile of the authenticated user, or `nil` when logged out.
     @Published var currentUser: User?
+    /// A localized message describing the most recent auth failure. Cleared on success.
     @Published var errorMessage: String?
 
+    /// Shared singleton instance used throughout the app.
     static let shared = AuthManager()
 
     private init() {
@@ -23,6 +36,16 @@ class AuthManager: ObservableObject {
 
     // MARK: - Authentication Methods
 
+    /// Authenticates a user with a username and password against the mock backend.
+    ///
+    /// In production this method should issue a network request to your authentication
+    /// endpoint and securely store the returned token in the Keychain. The current
+    /// implementation accepts only `demo` / `password` for demonstration purposes.
+    ///
+    /// - Parameters:
+    ///   - username: The user-supplied username string.
+    ///   - password: The user-supplied password string.
+    /// - Returns: `true` if authentication succeeded; `false` otherwise.
     func login(username: String, password: String) async -> Bool {
         // Simulate API call
         try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
@@ -49,11 +72,24 @@ class AuthManager: ObservableObject {
         }
     }
 
+    /// Authenticates the user with the device's biometric sensor via `LocalAuthentication`.
+    ///
+    /// `LAContext.canEvaluatePolicy` is called first to confirm biometrics are enrolled
+    /// and available. If unavailable, the error (e.g., "Biometric data not enrolled")
+    /// is forwarded to `errorMessage`. On success the previously saved `User` profile is
+    /// restored so the session feels seamless.
+    ///
+    /// - Returns: `true` when the biometric challenge succeeded; `false` otherwise.
     func authenticateWithBiometrics() async -> Bool {
+        // LAContext is the LocalAuthentication entry point. A new instance is
+        // required for each authentication request; reusing a context can cause
+        // unexpected behavior after a failed evaluation.
         let context = LAContext()
         var error: NSError?
 
-        // Check if biometric authentication is available
+        // Check if biometric authentication is available on this device.
+        // The policy .deviceOwnerAuthenticationWithBiometrics also allows the
+        // device passcode as a fallback when biometrics fail too many times.
         guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
             await MainActor.run {
                 self.errorMessage = error?.localizedDescription ?? "Biometric authentication not available"
@@ -64,6 +100,7 @@ class AuthManager: ObservableObject {
         do {
             let success = try await context.evaluatePolicy(
                 .deviceOwnerAuthenticationWithBiometrics,
+                // localizedReason is shown in the system biometric prompt dialog.
                 localizedReason: "Log in to PRPay"
             )
 
@@ -78,6 +115,7 @@ class AuthManager: ObservableObject {
             }
             return success
         } catch {
+            // LAError codes include userCancel, authenticationFailed, etc.
             await MainActor.run {
                 self.errorMessage = error.localizedDescription
             }
@@ -85,6 +123,10 @@ class AuthManager: ObservableObject {
         }
     }
 
+    /// Ends the current user session and resets all published auth state.
+    ///
+    /// Persisted profile data in `UserDefaults` is intentionally left intact so
+    /// the user's name and preferences are restored on next login.
     func logout() {
         isAuthenticated = false
         currentUser = nil
@@ -94,14 +136,19 @@ class AuthManager: ObservableObject {
     }
 
     private func checkAuthStatus() {
-        // In production, check for stored credentials/tokens
-        // For now, default to not authenticated
+        // In production, check for stored credentials/tokens (e.g., a Keychain token).
+        // For now, default to not authenticated so the login screen always shows on launch.
         isAuthenticated = false
     }
 
     // MARK: - Helper Methods
 
+    /// A human-readable name for the biometric type available on this device.
+    ///
+    /// Returns `"Face ID"`, `"Touch ID"`, `"Optic ID"`, or `"Biometrics"` as a
+    /// generic fallback. Used to label the biometric button in `LoginView`.
     var biometricType: String {
+        // A fresh LAContext is needed to read biometryType accurately.
         let context = LAContext()
         var error: NSError?
 
@@ -117,10 +164,12 @@ class AuthManager: ObservableObject {
         case .opticID:
             return "Optic ID"
         @unknown default:
+            // Guard against future biometry types added by Apple.
             return "Biometrics"
         }
     }
 
+    /// `true` when at least one biometric factor is enrolled and available on this device.
     var isBiometricAvailable: Bool {
         let context = LAContext()
         return context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)

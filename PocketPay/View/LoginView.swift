@@ -7,10 +7,20 @@
 
 import SwiftUI
 
+/// The authentication gate shown when no session is active.
+///
+/// Provides two sign-in paths:
+/// - **Username/password**: Demo credentials (`demo` / `password`) are shown at
+///   the bottom of the screen for evaluators. In production the hint section
+///   should be removed and the login method should call a real API.
+/// - **Biometrics**: The button label and icon adapt to the device's biometry type
+///   (Face ID, Touch ID, Optic ID) using `AuthManager.biometricType`. The button
+///   is hidden on simulators or devices where biometrics are not enrolled.
 struct LoginView: View {
     @StateObject private var authManager = AuthManager.shared
     @State private var username = ""
     @State private var password = ""
+    /// Controls the loading spinner on the primary login button.
     @State private var isLoading = false
     @State private var showError = false
 
@@ -132,6 +142,10 @@ struct LoginView: View {
 
     // MARK: - Actions
 
+    /// Initiates the username/password login flow in a detached async Task.
+    ///
+    /// Sets `isLoading` to show the progress indicator while the async call is
+    /// in flight, then clears it when `AuthManager.login` resolves.
     private func login() {
         isLoading = true
         Task {
@@ -145,6 +159,10 @@ struct LoginView: View {
         }
     }
 
+    /// Initiates biometric authentication via `LAContext` through `AuthManager`.
+    ///
+    /// The system biometric prompt (Face ID / Touch ID dialog) is shown by the
+    /// operating system; this method only triggers it and handles the result.
     private func loginWithBiometrics() {
         isLoading = true
         Task {
@@ -161,9 +179,11 @@ struct LoginView: View {
 
 // MARK: - Custom Text Field
 
+/// A styled text field with a leading SF Symbol icon, used in `LoginView`.
 struct CustomTextField: View {
     let placeholder: String
     @Binding var text: String
+    /// SF Symbol name for the leading icon (e.g., `"person.fill"`).
     let icon: String
 
     var body: some View {
@@ -185,6 +205,9 @@ struct CustomTextField: View {
 
 // MARK: - Custom Secure Field
 
+/// A styled secure text field (password entry) with a leading SF Symbol icon.
+///
+/// Mirrors `CustomTextField` but uses `SecureField` so the input is masked.
 struct CustomSecureField: View {
     let placeholder: String
     @Binding var text: String

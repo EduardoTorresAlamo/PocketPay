@@ -7,8 +7,14 @@
 
 import SwiftUI
 
+/// Global design-system constants for the PRPay app.
+///
+/// All values are grouped into nested namespaces so call sites read clearly:
+/// `AppConstants.Colors.primaryPurple`, `AppConstants.Spacing.medium`, etc.
 struct AppConstants {
     // MARK: - Colors (Dynamic - supports Light & Dark Mode)
+
+    /// Semantic and brand colors that automatically adapt to light and dark mode.
     struct Colors {
         // Primary Brand Colors
         static let primaryPurple = Color(hex: "#8A2BE2") // BlueViolet
@@ -16,6 +22,7 @@ struct AppConstants {
         static let accentLavender = Color(hex: "#E6E6FA") // Lavender
 
         // Semantic Colors (Adaptive)
+        /// Maps to UIColor.systemBackground so it inverts between light/dark mode.
         static let background = Color(.systemBackground)
         static let secondaryBackground = Color(.secondarySystemBackground)
         static let tertiaryBackground = Color(.tertiarySystemBackground)
@@ -46,6 +53,9 @@ struct AppConstants {
     }
 
     // MARK: - Typography
+
+    /// Fixed font styles that mirror the iOS type scale but are
+    /// defined explicitly so they remain consistent if system defaults change.
     struct Typography {
         static let largeTitle: Font = .system(size: 34, weight: .bold)
         static let title: Font = .system(size: 28, weight: .bold)
@@ -59,6 +69,8 @@ struct AppConstants {
     }
 
     // MARK: - Spacing
+
+    /// 4-point spacing scale used throughout the layout system.
     struct Spacing {
         static let extraSmall: CGFloat = 4
         static let small: CGFloat = 8
@@ -68,6 +80,8 @@ struct AppConstants {
     }
 
     // MARK: - Corner Radius (Updated for friendlier look)
+
+    /// Rounded-corner radii for cards, buttons, and inputs.
     struct CornerRadius {
         static let small: CGFloat = 12
         static let medium: CGFloat = 16
@@ -76,6 +90,8 @@ struct AppConstants {
     }
 
     // MARK: - App Info
+
+    /// Static metadata about the application used in Stripe configuration and UI labels.
     struct AppInfo {
         static let name = "PRPay"
         static let version = "1.0.0"
@@ -86,6 +102,13 @@ struct AppConstants {
 
 // MARK: - Color Extension
 extension Color {
+    /// Creates a `Color` from a CSS-style hex string.
+    ///
+    /// Supports 3-digit RGB (`#RGB`), 6-digit RGB (`#RRGGBB`), and
+    /// 8-digit ARGB (`#AARRGGBB`) formats. The leading `#` is stripped
+    /// automatically. Invalid strings produce a transparent color.
+    ///
+    /// - Parameter hex: Hex color string, with or without a leading `#`.
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
@@ -99,6 +122,7 @@ extension Color {
         case 8: // ARGB (32-bit)
             (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
         default:
+            // Return a transparent color for any unrecognized format.
             (a, r, g, b) = (1, 1, 1, 0)
         }
 

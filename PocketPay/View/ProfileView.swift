@@ -7,12 +7,21 @@
 
 import SwiftUI
 
+/// Displays and allows editing of the authenticated user's profile information.
+///
+/// Profile fields are loaded from `AuthManager.currentUser` on appear. When
+/// `isEditing` is `true`, fields become editable text inputs. Saving persists
+/// changes via `User.save()` (UserDefaults) and updates `AuthManager.currentUser`
+/// so balance and greeting on other screens reflect the change immediately.
+/// The logout button calls `AuthManager.logout()` which clears `isAuthenticated`
+/// and triggers the root view switch back to `LoginView`.
 struct ProfileView: View {
     @StateObject private var authManager = AuthManager.shared
     @State private var fullName = ""
     @State private var email = ""
     @State private var phoneNumber = ""
     @State private var mailingAddress = ""
+    /// When `true`, all `ProfileField` views switch from read-only to editable.
     @State private var isEditing = false
     @State private var showingSaveSuccess = false
 
@@ -164,6 +173,9 @@ struct ProfileView: View {
         }
     }
 
+    /// Copies the current user's profile fields into the local `@State` properties.
+    ///
+    /// Called on `onAppear` and when the user cancels editing to restore the last saved values.
     private func loadProfile() {
         if let user = authManager.currentUser {
             fullName = user.fullName
@@ -173,6 +185,10 @@ struct ProfileView: View {
         }
     }
 
+    /// Persists the edited profile fields to `UserDefaults` and updates `AuthManager`.
+    ///
+    /// Writing back to `authManager.currentUser` ensures that other screens (e.g.,
+    /// the home screen greeting) reflect the new name without requiring a restart.
     private func saveProfile() {
         guard var user = authManager.currentUser else { return }
 
@@ -181,16 +197,17 @@ struct ProfileView: View {
         user.phoneNumber = phoneNumber
         user.mailingAddress = mailingAddress
 
-        // Save to UserDefaults
+        // Persist to UserDefaults via the User extension.
         user.save()
 
-        // Update in AuthManager
+        // Publish the updated user so @Published observers in other views update.
         authManager.currentUser = user
 
         isEditing = false
         showingSaveSuccess = true
     }
 
+    /// Discards unsaved edits by reloading the last persisted profile data.
     private func cancelEditing() {
         loadProfile()
         isEditing = false
@@ -199,12 +216,28 @@ struct ProfileView: View {
 
 // MARK: - Profile Field
 
+/// A labeled form row that switches between a read-only text view and an editable
+/// text field based on `isEditing`.
+///
+/// When in edit mode, the row supports both single-line (e.g., name, email) and
+/// multi-line (e.g., mailing address) inputs via the `isMultiline` flag.
+/// Keyboard type and autocapitalization adapt per field:
+/// - `.emailAddress` keyboard disables autocapitalization.
+/// - All other fields use `.words` capitalization.
+///
+/// The read-only state displays `"Not set"` in tertiary color when `text` is empty.
 struct ProfileField: View {
+    /// Uppercase label shown above the field row (e.g., `"FULL NAME"`).
     let label: String
+    /// SF Symbol name for the leading icon (e.g., `"person.fill"`).
     let icon: String
+    /// Two-way binding to the text value being displayed or edited.
     @Binding var text: String
+    /// When `true`, the field renders an interactive `TextField`; when `false`, plain `Text`.
     let isEditing: Bool
+    /// Keyboard type shown when `isEditing` is `true`. Defaults to `.default`.
     var keyboardType: UIKeyboardType = .default
+    /// When `true`, uses a vertical axis `TextField` allowing up to 6 lines of input.
     var isMultiline: Bool = false
 
     var body: some View {

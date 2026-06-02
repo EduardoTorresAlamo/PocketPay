@@ -7,6 +7,15 @@
 
 import SwiftUI
 
+/// Sheet form for paying a bill immediately, with an option to create a recurring schedule.
+///
+/// All form-field state is stored in `ServicesViewModel` (via `@Published` properties)
+/// so that the same ViewModel instance that drives `ServicesView` owns the form.
+/// When "Add to Calendar" is toggled on, an `EKRecurrenceRule` event series is created
+/// via `CalendarManager` after the payment is processed.
+///
+/// The submit button label adapts: it reads "Add & Pay" when `isRecurringEnabled` is
+/// `true`, or "Pay Now" for a one-time charge.
 struct AddPaymentView: View {
     @ObservedObject var viewModel: ServicesViewModel
     @Environment(\.dismiss) private var dismiss

@@ -7,12 +7,28 @@
 
 import SwiftUI
 
+/// A detail sheet for a single `Transaction` showing all metadata fields.
+///
+/// If the transaction is linked to a `RecurringPayment` (via `recurringPaymentId`),
+/// the view also shows the payment frequency and next due date, and provides a
+/// "Stop Recurring Payment" button that calls `ServicesViewModel.togglePaymentStatus`.
+/// The `servicesViewModel` reference must be the same instance that owns the
+/// `recurringPayments` array so that `recurringPayment` resolves correctly.
 struct TransactionDetailView: View {
+    /// The transaction whose details are displayed.
     let transaction: Transaction
+    /// The Services ViewModel used to look up the linked `RecurringPayment` and
+    /// to toggle its active state if the user stops the recurring schedule.
     @ObservedObject var servicesViewModel: ServicesViewModel
     @Environment(\.dismiss) private var dismiss
+    /// Controls the confirmation alert before stopping a recurring payment.
     @State private var showingStopRecurring = false
 
+    /// Looks up the `RecurringPayment` linked to this transaction, if any.
+    ///
+    /// Matches `transaction.recurringPaymentId` against the IDs in
+    /// `servicesViewModel.recurringPayments`. Returns `nil` when the transaction
+    /// is not recurring or when the linked payment no longer exists.
     var recurringPayment: RecurringPayment? {
         guard let recurringId = transaction.recurringPaymentId else { return nil }
         return servicesViewModel.recurringPayments.first { $0.id == recurringId }
@@ -130,6 +146,7 @@ struct TransactionDetailView: View {
         }
     }
 
+    /// Background color for the status pill badge based on `transaction.status`.
     private var statusColor: Color {
         switch transaction.status {
         case .completed:
@@ -144,10 +161,19 @@ struct TransactionDetailView: View {
 
 // MARK: - Detail Row
 
+/// A label-value pair row used in `TransactionDetailView`.
+///
+/// Renders a secondary-color label on the left and a primary-color value on the
+/// right. When `icon` and `iconColor` are both non-nil, a small SF Symbol is
+/// displayed immediately before the value text.
 struct DetailRow: View {
+    /// The field label shown in secondary text (e.g., `"Category"`, `"Date"`).
     let label: String
+    /// The field value shown in primary text (e.g., `"Utilities"`, `"Jan 5, 2026"`).
     let value: String
+    /// Optional SF Symbol name displayed alongside the value.
     var icon: String? = nil
+    /// Color applied to the optional icon.
     var iconColor: Color? = nil
 
     var body: some View {

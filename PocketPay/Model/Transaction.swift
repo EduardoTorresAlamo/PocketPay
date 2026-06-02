@@ -9,17 +9,25 @@ import Foundation
 import SwiftUI
 
 // MARK: - Transaction Category
+
+/// Classifies a transaction for display, filtering, and color-coding purposes.
+///
+/// `CaseIterable` conformance lets `HistoryView` enumerate all categories
+/// for its filter chip row.
 enum TransactionCategory: String, Codable, CaseIterable {
     case utilities = "Utilities"
     case rent = "Rent"
     case subscription = "Subscription"
+    /// Person-to-person transfer between app users.
     case p2p = "Person to Person"
     case general = "General"
 
+    /// Human-readable label used in the UI. Backed by the raw value.
     var displayName: String {
         return self.rawValue
     }
 
+    /// SF Symbol name representing this category in icon views.
     var icon: String {
         switch self {
         case .utilities:
@@ -35,6 +43,7 @@ enum TransactionCategory: String, Codable, CaseIterable {
         }
     }
 
+    /// Brand color associated with this category, sourced from `AppConstants.Colors`.
     var color: Color {
         switch self {
         case .utilities:
@@ -52,6 +61,12 @@ enum TransactionCategory: String, Codable, CaseIterable {
 }
 
 // MARK: - Transaction Type (Deprecated - use Category instead)
+
+/// High-level classification of a transaction's origin.
+///
+/// This enum predates `TransactionCategory` and is retained for
+/// `Codable` backward-compatibility. Prefer `TransactionCategory` for
+/// any new display or filtering logic.
 enum TransactionType: String, Codable {
     case p2p = "Person to Person"
     case business = "Business Payment"
@@ -60,6 +75,8 @@ enum TransactionType: String, Codable {
 }
 
 // MARK: - Transaction Status
+
+/// The settlement state of a transaction.
 enum TransactionStatus: String, Codable {
     case completed = "Completed"
     case pending = "Pending"
@@ -67,17 +84,35 @@ enum TransactionStatus: String, Codable {
 }
 
 // MARK: - Transaction Model
+
+/// Represents a single financial transaction recorded in the app ledger.
+///
+/// Transactions are immutable once created (all `let` properties) except for
+/// `status`, which can be updated if a pending payment is later resolved.
+/// `isIncoming` determines the sign prefix shown in `formattedAmount`.
 struct Transaction: Identifiable, Codable {
+    /// Stable unique identifier used by SwiftUI `ForEach` and list diffing.
     let id: UUID
+    /// High-level origin type of the transaction (P2P, business, donation).
     let type: TransactionType
+    /// Semantic category used for filtering, icons, and color coding.
     let category: TransactionCategory
+    /// Absolute dollar amount of the transaction (always positive; direction is set by `isIncoming`).
     let amount: Double
+    /// Timestamp when the transaction was initiated.
     let date: Date
+    /// Current settlement state; mutable so pending transactions can be resolved later.
     var status: TransactionStatus
+    /// Display name of the payee or payer shown in transaction rows.
     let recipientName: String
+    /// Phone number of the recipient for P2P transfers; `nil` for business payments.
     let recipientPhone: String?
+    /// Optional user-supplied memo attached to the transaction.
     let notes: String?
+    /// `true` when money was received by the current user (e.g., a friend sent funds).
     let isIncoming: Bool
+    /// Links this transaction to a `RecurringPayment` so it can be identified
+    /// as an auto-pay entry in `TransactionDetailView`.
     let recurringPaymentId: UUID? // Link to recurring payment if applicable
 
     init(
@@ -106,23 +141,27 @@ struct Transaction: Identifiable, Codable {
         self.recurringPaymentId = recurringPaymentId
     }
 
+    /// Dollar amount with a `+` prefix for incoming and `-` for outgoing transactions.
     var formattedAmount: String {
         let prefix = isIncoming ? "+" : "-"
         return "\(prefix)$\(String(format: "%.2f", amount))"
     }
 
+    /// Transaction date formatted as `"Jan 5, 2026"`.
     var formattedDate: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d, yyyy"
         return formatter.string(from: date)
     }
 
+    /// Transaction time formatted as `"3:45 PM"`.
     var formattedTime: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
     }
 
+    /// `true` when this transaction is linked to a recurring payment schedule.
     var isRecurring: Bool {
         return recurringPaymentId != nil
     }
