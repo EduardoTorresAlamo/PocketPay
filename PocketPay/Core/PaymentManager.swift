@@ -1,6 +1,6 @@
 //
 //  PaymentManager.swift
-//  PRPay
+//  PocketPay
 //
 //  Created by Eduardo Torres on 1/21/26.
 //
@@ -16,10 +16,12 @@ import Combine
 /// to its published `transactions` array and deducts the amount from the current
 /// user's in-memory balance.
 ///
-/// All UI state mutations happen on the `MainActor` so `@Published` changes are
+/// The whole class is isolated to the `MainActor` so `@Published` changes are
 /// always delivered on the main thread regardless of which async context calls
-/// these methods.
-class PaymentManager: ObservableObject {
+/// these methods. Consumers should depend on `PaymentProcessing` rather than on
+/// this concrete type so tests can substitute a double.
+@MainActor
+class PaymentManager: ObservableObject, PaymentProcessing {
     /// Chronologically sorted list of all transactions. New payments are inserted
     /// at index 0 so the most recent item always appears first.
     @Published var transactions: [Transaction] = []
@@ -31,10 +33,17 @@ class PaymentManager: ObservableObject {
     /// Shared singleton referenced by ViewModels throughout the app.
     static let shared = PaymentManager()
 
-    private let stripeManager = StripeManager.shared
-    private let authManager = AuthManager.shared
+    private let stripeManager: StripeManager
+    private let authManager: any AuthManaging
 
-    private init() {
+    /// Creates a payment manager backed by the given collaborators.
+    ///
+    /// Both dependencies default to their shared singletons so production code
+    /// keeps using `PaymentManager.shared`; tests construct their own instance
+    /// with an `AuthManaging` double.
+    init(stripeManager: StripeManager = .shared, authManager: any AuthManaging = AuthManager.shared) {
+        self.stripeManager = stripeManager
+        self.authManager = authManager
         // Load mock transactions
         loadTransactions()
     }
@@ -62,30 +71,22 @@ class PaymentManager: ObservableObject {
     /// - Returns: `true` when the transfer completed successfully.
     func sendMoney(to contact: Contact, amount: Double, notes: String?) async -> Bool {
         guard let currentUser = authManager.currentUser else {
-            await MainActor.run {
-                self.errorMessage = "User not authenticated"
-            }
+            errorMessage = "User not authenticated"
             return false
         }
 
         guard amount > 0 else {
-            await MainActor.run {
-                self.errorMessage = "Amount must be greater than zero"
-            }
+            errorMessage = "Amount must be greater than zero"
             return false
         }
 
         guard currentUser.balance >= amount else {
-            await MainActor.run {
-                self.errorMessage = "Insufficient balance"
-            }
+            errorMessage = "Insufficient balance"
             return false
         }
 
-        await MainActor.run {
-            self.isProcessing = true
-            self.errorMessage = nil
-        }
+        isProcessing = true
+        errorMessage = nil
 
         // Delegate the actual charge to StripeManager (or mock).
         let paymentSuccess = await stripeManager.processPayment(amount: amount)
@@ -102,22 +103,18 @@ class PaymentManager: ObservableObject {
                 notes: notes
             )
 
-            await MainActor.run {
-                // Prepend so the new transaction appears at the top of the history list.
-                self.transactions.insert(transaction, at: 0)
+            // Prepend so the new transaction appears at the top of the history list.
+            transactions.insert(transaction, at: 0)
 
-                // Optimistically deduct balance from the in-memory user model.
-                self.authManager.currentUser?.balance -= amount
+            // Optimistically deduct balance from the in-memory user model.
+            authManager.currentUser?.balance -= amount
 
-                self.isProcessing = false
-            }
+            isProcessing = false
 
             return true
         } else {
-            await MainActor.run {
-                self.errorMessage = stripeManager.errorMessage ?? "Payment failed"
-                self.isProcessing = false
-            }
+            errorMessage = stripeManager.errorMessage ?? "Payment failed"
+            isProcessing = false
             return false
         }
     }
@@ -134,30 +131,22 @@ class PaymentManager: ObservableObject {
     /// - Returns: `true` on success.
     func payBusiness(name: String, amount: Double, notes: String?) async -> Bool {
         guard let currentUser = authManager.currentUser else {
-            await MainActor.run {
-                self.errorMessage = "User not authenticated"
-            }
+            errorMessage = "User not authenticated"
             return false
         }
 
         guard amount > 0 else {
-            await MainActor.run {
-                self.errorMessage = "Amount must be greater than zero"
-            }
+            errorMessage = "Amount must be greater than zero"
             return false
         }
 
         guard currentUser.balance >= amount else {
-            await MainActor.run {
-                self.errorMessage = "Insufficient balance"
-            }
+            errorMessage = "Insufficient balance"
             return false
         }
 
-        await MainActor.run {
-            self.isProcessing = true
-            self.errorMessage = nil
-        }
+        isProcessing = true
+        errorMessage = nil
 
         // Process payment through Stripe
         let paymentSuccess = await stripeManager.processPayment(amount: amount)
@@ -173,22 +162,18 @@ class PaymentManager: ObservableObject {
                 notes: notes
             )
 
-            await MainActor.run {
-                // Add transaction to history
-                self.transactions.insert(transaction, at: 0)
+            // Add transaction to history
+            transactions.insert(transaction, at: 0)
 
-                // Update user balance
-                self.authManager.currentUser?.balance -= amount
+            // Update user balance
+            authManager.currentUser?.balance -= amount
 
-                self.isProcessing = false
-            }
+            isProcessing = false
 
             return true
         } else {
-            await MainActor.run {
-                self.errorMessage = stripeManager.errorMessage ?? "Payment failed"
-                self.isProcessing = false
-            }
+            errorMessage = stripeManager.errorMessage ?? "Payment failed"
+            isProcessing = false
             return false
         }
     }
@@ -204,30 +189,22 @@ class PaymentManager: ObservableObject {
     /// - Returns: `true` on success.
     func makeDonation(to organization: String, amount: Double) async -> Bool {
         guard let currentUser = authManager.currentUser else {
-            await MainActor.run {
-                self.errorMessage = "User not authenticated"
-            }
+            errorMessage = "User not authenticated"
             return false
         }
 
         guard amount > 0 else {
-            await MainActor.run {
-                self.errorMessage = "Amount must be greater than zero"
-            }
+            errorMessage = "Amount must be greater than zero"
             return false
         }
 
         guard currentUser.balance >= amount else {
-            await MainActor.run {
-                self.errorMessage = "Insufficient balance"
-            }
+            errorMessage = "Insufficient balance"
             return false
         }
 
-        await MainActor.run {
-            self.isProcessing = true
-            self.errorMessage = nil
-        }
+        isProcessing = true
+        errorMessage = nil
 
         // Process payment through Stripe
         let paymentSuccess = await stripeManager.processPayment(amount: amount)
@@ -242,22 +219,18 @@ class PaymentManager: ObservableObject {
                 recipientName: organization
             )
 
-            await MainActor.run {
-                // Add transaction to history
-                self.transactions.insert(transaction, at: 0)
+            // Add transaction to history
+            transactions.insert(transaction, at: 0)
 
-                // Update user balance
-                self.authManager.currentUser?.balance -= amount
+            // Update user balance
+            authManager.currentUser?.balance -= amount
 
-                self.isProcessing = false
-            }
+            isProcessing = false
 
             return true
         } else {
-            await MainActor.run {
-                self.errorMessage = stripeManager.errorMessage ?? "Payment failed"
-                self.isProcessing = false
-            }
+            errorMessage = stripeManager.errorMessage ?? "Payment failed"
+            isProcessing = false
             return false
         }
     }

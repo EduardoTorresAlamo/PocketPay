@@ -1,6 +1,6 @@
 //
 //  AuthManager.swift
-//  PRPay
+//  PocketPay
 //
 //  Created by Eduardo Torres on 1/21/26.
 //
@@ -12,13 +12,18 @@ import LocalAuthentication
 /// Manages user identity and session state for the app.
 ///
 /// `AuthManager` is a singleton that drives the root authentication gate in
-/// `PRPayApp`. It publishes `isAuthenticated` so the root view can reactively
+/// `PocketPayApp`. It publishes `isAuthenticated` so the root view can reactively
 /// switch between `LoginView` and `MainTabView`.
 ///
 /// Authentication strategies supported:
 /// - Username/password (mock implementation for demo; replace with a real API call in production)
 /// - Biometrics via `LocalAuthentication` (Face ID, Touch ID, or Optic ID depending on device)
-class AuthManager: ObservableObject {
+///
+/// The whole class is isolated to the `MainActor` because every stored property
+/// is `@Published` and drives UI. Consumers should depend on `AuthManaging`
+/// rather than on this concrete type so tests can substitute a double.
+@MainActor
+class AuthManager: ObservableObject, AuthManaging {
     /// Whether the user currently has an active session.
     @Published var isAuthenticated = false
     /// The profile of the authenticated user, or `nil` when logged out.
@@ -52,22 +57,18 @@ class AuthManager: ObservableObject {
 
         // Mock authentication - in production, call your backend API
         if username.lowercased() == "demo" && password == "password" {
-            await MainActor.run {
-                // Load saved user or use mock user
-                var user = User.load() ?? User.mockUser
-                user.username = username
-                self.currentUser = user
-                self.isAuthenticated = true
-                self.errorMessage = nil
-                // Save user for persistence
-                user.save()
-            }
+            // Load saved user or use mock user
+            var user = User.load() ?? User.mockUser
+            user.username = username
+            currentUser = user
+            isAuthenticated = true
+            errorMessage = nil
+            // Save user for persistence
+            user.save()
             return true
         } else {
-            await MainActor.run {
-                self.errorMessage = "Invalid username or password"
-                self.isAuthenticated = false
-            }
+            errorMessage = "Invalid username or password"
+            isAuthenticated = false
             return false
         }
     }
@@ -91,9 +92,7 @@ class AuthManager: ObservableObject {
         // The policy .deviceOwnerAuthenticationWithBiometrics also allows the
         // device passcode as a fallback when biometrics fail too many times.
         guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
-            await MainActor.run {
-                self.errorMessage = error?.localizedDescription ?? "Biometric authentication not available"
-            }
+            errorMessage = error?.localizedDescription ?? "Biometric authentication not available"
             return false
         }
 
@@ -101,24 +100,20 @@ class AuthManager: ObservableObject {
             let success = try await context.evaluatePolicy(
                 .deviceOwnerAuthenticationWithBiometrics,
                 // localizedReason is shown in the system biometric prompt dialog.
-                localizedReason: "Log in to PRPay"
+                localizedReason: "Log in to PocketPay"
             )
 
             if success {
-                await MainActor.run {
-                    // Load saved user or use mock user
-                    let user = User.load() ?? User.mockUser
-                    self.currentUser = user
-                    self.isAuthenticated = true
-                    self.errorMessage = nil
-                }
+                // Load saved user or use mock user
+                let user = User.load() ?? User.mockUser
+                currentUser = user
+                isAuthenticated = true
+                errorMessage = nil
             }
             return success
         } catch {
             // LAError codes include userCancel, authenticationFailed, etc.
-            await MainActor.run {
-                self.errorMessage = error.localizedDescription
-            }
+            errorMessage = error.localizedDescription
             return false
         }
     }

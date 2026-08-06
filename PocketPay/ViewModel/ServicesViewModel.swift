@@ -1,6 +1,6 @@
 //
 //  ServicesViewModel.swift
-//  PRPay
+//  PocketPay
 //
 //  Created by Eduardo Torres on 1/21/26.
 //
@@ -17,6 +17,10 @@ import Combine
 /// When a new recurring payment is added with "Add to Calendar" enabled, this
 /// ViewModel calls `CalendarManager.createRecurringPaymentEvent` to schedule
 /// an EventKit reminder series before returning to the Services list.
+///
+/// Isolated to the `MainActor` at class level: every stored property is
+/// `@Published` and read directly by the view.
+@MainActor
 class ServicesViewModel: ObservableObject {
     /// All recurring payments, including inactive ones.
     @Published var recurringPayments: [RecurringPayment] = []
@@ -57,10 +61,19 @@ class ServicesViewModel: ObservableObject {
     /// Number of days before the due date the calendar reminder should fire (1, 2, or 3).
     @Published var reminderOffset: Int = 1
 
-    private let paymentManager = PaymentManager.shared
-    private let calendarManager = CalendarManager.shared
+    private let paymentManager: any PaymentProcessing
+    private let calendarManager: CalendarManager
 
-    init() {
+    /// Creates the ViewModel with the given collaborators.
+    ///
+    /// Both default to the shared singletons so views can keep calling
+    /// `ServicesViewModel()`; tests inject doubles instead.
+    init(
+        paymentManager: any PaymentProcessing = PaymentManager.shared,
+        calendarManager: CalendarManager = .shared
+    ) {
+        self.paymentManager = paymentManager
+        self.calendarManager = calendarManager
         loadRecurringPayments()
     }
 
@@ -79,10 +92,8 @@ class ServicesViewModel: ObservableObject {
     ///
     /// - Parameter payment: The recurring payment to charge now.
     func payBill(payment: RecurringPayment) async {
-        await MainActor.run {
-            self.isProcessing = true
-            self.errorMessage = nil
-        }
+        isProcessing = true
+        errorMessage = nil
 
         let success = await paymentManager.payBusiness(
             name: payment.billerName,
@@ -90,20 +101,18 @@ class ServicesViewModel: ObservableObject {
             notes: payment.notes
         )
 
-        await MainActor.run {
-            self.isProcessing = false
+        isProcessing = false
 
-            if success {
-                self.showingSuccess = true
-                // Update the next payment date
-                if let index = self.recurringPayments.firstIndex(where: { $0.id == payment.id }) {
-                    self.recurringPayments[index].lastPaymentDate = Date()
-                    self.recurringPayments[index].nextPaymentDate = payment.frequency.nextDate(from: Date())
-                }
-                self.loadRecurringPayments()
-            } else {
-                self.errorMessage = paymentManager.errorMessage ?? "Payment failed"
+        if success {
+            showingSuccess = true
+            // Update the next payment date
+            if let index = recurringPayments.firstIndex(where: { $0.id == payment.id }) {
+                recurringPayments[index].lastPaymentDate = Date()
+                recurringPayments[index].nextPaymentDate = payment.frequency.nextDate(from: Date())
             }
+            loadRecurringPayments()
+        } else {
+            errorMessage = paymentManager.errorMessage ?? "Payment failed"
         }
     }
 
@@ -119,16 +128,12 @@ class ServicesViewModel: ObservableObject {
     /// 5. Resets the form on success.
     func payOneTimeBill() async {
         guard !billerName.isEmpty, amount > 0 else {
-            await MainActor.run {
-                self.errorMessage = "Please fill in all required fields"
-            }
+            errorMessage = "Please fill in all required fields"
             return
         }
 
-        await MainActor.run {
-            self.isProcessing = true
-            self.errorMessage = nil
-        }
+        isProcessing = true
+        errorMessage = nil
 
         let success = await paymentManager.payBusiness(
             name: billerName,
@@ -163,29 +168,23 @@ class ServicesViewModel: ObservableObject {
 
                 if !calendarSuccess {
                     print("❌ ServicesViewModel: Calendar event creation failed")
-                    await MainActor.run {
-                        self.errorMessage = "Payment created but calendar event failed. Check calendar permissions."
-                    }
+                    errorMessage = "Payment created but calendar event failed. Check calendar permissions."
                 } else {
                     print("✅ ServicesViewModel: Calendar event created successfully")
                 }
             }
 
-            await MainActor.run {
-                self.recurringPayments.append(newRecurring)
-                self.loadRecurringPayments()
-            }
+            recurringPayments.append(newRecurring)
+            loadRecurringPayments()
         }
 
-        await MainActor.run {
-            self.isProcessing = false
+        isProcessing = false
 
-            if success {
-                self.showingSuccess = true
-                self.resetForm()
-            } else {
-                self.errorMessage = paymentManager.errorMessage ?? "Payment failed"
-            }
+        if success {
+            showingSuccess = true
+            resetForm()
+        } else {
+            errorMessage = paymentManager.errorMessage ?? "Payment failed"
         }
     }
 

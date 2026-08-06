@@ -1,6 +1,6 @@
 //
 //  HomeViewModel.swift
-//  PRPay
+//  PocketPay
 //
 //  Created by Eduardo Torres on 1/21/26.
 //
@@ -14,6 +14,10 @@ import Combine
 /// and calls the mutating methods below in response to user actions. Business
 /// logic (balance formatting, greeting) is kept in the ViewModel so the view
 /// remains purely declarative.
+///
+/// Isolated to the `MainActor` at class level: every stored property is
+/// `@Published` and read directly by the view.
+@MainActor
 class HomeViewModel: ObservableObject {
     /// The authenticated user; sourced from `AuthManager.currentUser`.
     @Published var currentUser: User?
@@ -26,10 +30,19 @@ class HomeViewModel: ObservableObject {
     @Published var showingHistoryView = false
     @Published var showingScanQRView = false
 
-    private let authManager = AuthManager.shared
-    private let paymentManager = PaymentManager.shared
+    private let authManager: any AuthManaging
+    private let paymentManager: any PaymentProcessing
 
-    init() {
+    /// Creates the ViewModel with the given collaborators.
+    ///
+    /// Both default to the shared singletons so views can keep calling
+    /// `HomeViewModel()`; tests inject doubles instead.
+    init(
+        authManager: any AuthManaging = AuthManager.shared,
+        paymentManager: any PaymentProcessing = PaymentManager.shared
+    ) {
+        self.authManager = authManager
+        self.paymentManager = paymentManager
         loadData()
     }
 

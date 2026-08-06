@@ -1,6 +1,6 @@
 //
 //  WalletViewModel.swift
-//  PRPay
+//  PocketPay
 //
 //  Created by Eduardo Torres on 1/21/26.
 //
@@ -18,6 +18,10 @@ import Combine
 /// This ViewModel is a singleton (`WalletViewModel.shared`) because `WalletView`
 /// uses `@StateObject` with the shared instance, ensuring the carousel selection
 /// index survives tab switches.
+///
+/// Isolated to the `MainActor` at class level: every stored property is
+/// `@Published` and read directly by the view.
+@MainActor
 class WalletViewModel: ObservableObject {
     /// The user's full list of saved cards, ordered by insertion.
     @Published var paymentMethods: [PaymentMethod] = []

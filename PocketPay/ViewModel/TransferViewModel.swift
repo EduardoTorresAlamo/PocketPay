@@ -1,6 +1,6 @@
 //
 //  TransferViewModel.swift
-//  PRPay
+//  PocketPay
 //
 //  Created by Eduardo Torres on 1/21/26.
 //
@@ -18,6 +18,10 @@ import Combine
 /// kept as dollars with exactly two decimal places, and `appendDigit` / `deleteLastDigit`
 /// implement a shift-register style input so users type cents first (e.g., pressing
 /// "1", "5", "0" results in "$1.50").
+///
+/// Isolated to the `MainActor` at class level: every stored property is
+/// `@Published` and read directly by the view.
+@MainActor
 class TransferViewModel: ObservableObject {
     /// Full contact list loaded from the mock source.
     @Published var contacts: [Contact] = []
@@ -40,9 +44,14 @@ class TransferViewModel: ObservableObject {
     /// Holds the error message when a payment attempt fails.
     @Published var errorMessage: String?
 
-    private let paymentManager = PaymentManager.shared
+    private let paymentManager: any PaymentProcessing
 
-    init() {
+    /// Creates the ViewModel with the given payment layer.
+    ///
+    /// Defaults to the shared singleton so views can keep calling
+    /// `TransferViewModel()`; tests inject a double instead.
+    init(paymentManager: any PaymentProcessing = PaymentManager.shared) {
+        self.paymentManager = paymentManager
         loadContacts()
     }
 
@@ -164,10 +173,8 @@ class TransferViewModel: ObservableObject {
     func sendMoney() async {
         guard let contact = selectedContact else { return }
 
-        await MainActor.run {
-            self.isProcessing = true
-            self.errorMessage = nil
-        }
+        isProcessing = true
+        errorMessage = nil
 
         let success = await paymentManager.sendMoney(
             to: contact,
@@ -176,18 +183,16 @@ class TransferViewModel: ObservableObject {
             notes: notes.isEmpty ? nil : notes
         )
 
-        await MainActor.run {
-            self.isProcessing = false
+        isProcessing = false
 
-            if success {
-                self.showingSuccess = true
-                // Reset form after successful send so the sheet is clean on next open.
-                self.selectedContact = nil
-                self.amount = 0.0
-                self.notes = ""
-            } else {
-                self.errorMessage = paymentManager.errorMessage ?? "Transfer failed"
-            }
+        if success {
+            showingSuccess = true
+            // Reset form after successful send so the sheet is clean on next open.
+            selectedContact = nil
+            amount = 0.0
+            notes = ""
+        } else {
+            errorMessage = paymentManager.errorMessage ?? "Transfer failed"
         }
     }
 
