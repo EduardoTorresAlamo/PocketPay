@@ -42,4 +42,11 @@ protocol AuthManaging: AnyObject {
     ///
     /// - Parameter delta: Amount to add to the balance; pass a negative value to deduct.
     func updateBalance(by delta: Double)
+    /// Applies edited profile fields to the current user and persists the result.
+    ///
+    /// Keeps `AuthManager` the single writer of the user model; `ProfileView`
+    /// routes profile edits here rather than persisting the model directly.
+    ///
+    /// - Parameter user: The updated user profile to publish and persist.
+    func updateProfile(_ user: User)
 }

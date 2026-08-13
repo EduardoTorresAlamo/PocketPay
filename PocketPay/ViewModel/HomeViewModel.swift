@@ -80,9 +80,4 @@ class HomeViewModel: ObservableObject {
         guard let balance = currentUser?.balance else { return "$0.00" }
         return CurrencyFormatter.format(balance)
     }
-
-    /// Alias for `loadData()` used by pull-to-refresh handlers.
-    func refresh() {
-        loadData()
-    }
 }

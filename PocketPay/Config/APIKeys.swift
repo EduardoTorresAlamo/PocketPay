@@ -20,7 +20,7 @@ struct APIKeys {
     /// Replace with your actual server URL before going to production.
     static let backendURL = "https://your-backend-api.com"
 
-    /// When , all payment calls use mock implementations inside .
-    /// Set to  when a real backend is available.
+    /// When `true`, all payment calls use mock implementations inside `StripeManager`.
+    /// Set to `false` when a real backend is available.
     static let useMockPayments = true
 }

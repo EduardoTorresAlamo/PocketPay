@@ -34,8 +34,6 @@ class ServicesViewModel: ObservableObject {
     @Published var errorMessage: String?
     /// Triggers the success alert after a payment completes.
     @Published var showingSuccess = false
-    /// The payment selected for detail inspection (reserved for future use).
-    @Published var selectedPayment: RecurringPayment?
 
     // MARK: - Add Payment Form State
     // These properties are two-way bound to `AddPaymentView` form fields.

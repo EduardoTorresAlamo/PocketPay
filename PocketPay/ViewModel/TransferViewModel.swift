@@ -37,8 +37,6 @@ class TransferViewModel: ObservableObject {
     @Published var notes: String = ""
     /// `true` while the Stripe payment call is in flight.
     @Published var isProcessing = false
-    /// Reserved for a future confirmation step before submission.
-    @Published var showingConfirmation = false
     /// Triggers the success alert when the payment completes.
     @Published var showingSuccess = false
     /// Holds the error message when a payment attempt fails.
@@ -216,7 +214,6 @@ class TransferViewModel: ObservableObject {
         amount = 0.0
         notes = ""
         searchText = ""
-        showingConfirmation = false
         showingSuccess = false
         errorMessage = nil
     }

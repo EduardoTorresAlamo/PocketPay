@@ -51,25 +51,3 @@ struct User: Identifiable, Codable {
         )
     }
 }
-
-// MARK: - Keychain Persistence
-
-extension User {
-    private static let keychainKey = "com.pocketpay.current_user"
-
-    /// Encodes and persists the user to Keychain.
-    func save() {
-        KeychainManager.save(self, key: User.keychainKey)
-    }
-
-    /// Decodes and returns the user from Keychain, or `nil` if none exists.
-    static func load() -> User? {
-        let user: User? = KeychainManager.load(key: keychainKey)
-        return user
-    }
-
-    /// Removes the saved user from Keychain.
-    static func clearSaved() {
-        KeychainManager.delete(key: keychainKey)
-    }
-}

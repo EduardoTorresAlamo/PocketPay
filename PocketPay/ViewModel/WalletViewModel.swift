@@ -34,14 +34,19 @@ class WalletViewModel: ObservableObject {
     /// Shared instance used by both `WalletView` and `AddCardView`.
     static let shared = WalletViewModel()
 
-    init() {
+    /// Persistence layer for saved cards. Injected so the domain model stays
+    /// unaware of storage and tests can substitute a double.
+    private let repository: any PaymentMethodRepository
+
+    init(repository: any PaymentMethodRepository = KeychainPaymentMethodRepository()) {
+        self.repository = repository
         loadPaymentMethods()
     }
 
     /// Loads cards from `UserDefaults` (or mock data on first launch) and
     /// pre-selects the default card.
     func loadPaymentMethods() {
-        paymentMethods = PaymentMethod.loadAll()
+        paymentMethods = repository.loadAll()
         // Auto-select the default card; fall back to the first card if no default is set.
         if selectedPaymentMethod == nil {
             selectedPaymentMethod = paymentMethods.first { $0.isDefault } ?? paymentMethods.first
@@ -127,7 +132,7 @@ class WalletViewModel: ObservableObject {
     }
 
     private func savePaymentMethods() {
-        PaymentMethod.saveAll(paymentMethods)
+        repository.saveAll(paymentMethods)
     }
 
     /// The card currently flagged as `isDefault`, or `nil` if the wallet is empty.

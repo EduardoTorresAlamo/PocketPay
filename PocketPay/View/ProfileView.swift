@@ -197,11 +197,9 @@ struct ProfileView: View {
         user.phoneNumber = phoneNumber
         user.mailingAddress = mailingAddress
 
-        // Persist to UserDefaults via the User extension.
-        user.save()
-
-        // Publish the updated user so @Published observers in other views update.
-        authManager.currentUser = user
+        // Route the edit through AuthManager, the single writer of the user model.
+        // It publishes the updated user and persists it via the injected repository.
+        authManager.updateProfile(user)
 
         isEditing = false
         showingSaveSuccess = true

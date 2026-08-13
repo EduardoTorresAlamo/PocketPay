@@ -103,22 +103,3 @@ struct PaymentMethod: Identifiable, Codable {
         ]
     }
 }
-
-// MARK: - Keychain Persistence
-
-extension PaymentMethod {
-    private static let keychainKey = "com.pocketpay.payment_methods"
-
-    static func saveAll(_ methods: [PaymentMethod]) {
-        KeychainManager.save(methods, key: PaymentMethod.keychainKey)
-    }
-
-    static func loadAll() -> [PaymentMethod] {
-        let methods: [PaymentMethod]? = KeychainManager.load(key: PaymentMethod.keychainKey)
-        return methods ?? mockPaymentMethods
-    }
-
-    static func clearAll() {
-        KeychainManager.delete(key: PaymentMethod.keychainKey)
-    }
-}

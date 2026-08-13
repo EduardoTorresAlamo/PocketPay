@@ -33,7 +33,7 @@ class PaymentManager: ObservableObject, PaymentProcessing {
     /// Shared singleton referenced by ViewModels throughout the app.
     static let shared = PaymentManager()
 
-    private let stripeManager: StripeManager
+    private let stripeManager: any PaymentGateway
     private let authManager: any AuthManaging
 
     /// Keychain account name under which the transaction ledger is persisted.
@@ -44,7 +44,7 @@ class PaymentManager: ObservableObject, PaymentProcessing {
     /// Both dependencies default to their shared singletons so production code
     /// keeps using `PaymentManager.shared`; tests construct their own instance
     /// with an `AuthManaging` double.
-    init(stripeManager: StripeManager = .shared, authManager: any AuthManaging = AuthManager.shared) {
+    init(stripeManager: any PaymentGateway = StripeManager.shared, authManager: any AuthManaging = AuthManager.shared) {
         self.stripeManager = stripeManager
         self.authManager = authManager
         // Restore the persisted ledger, falling back to mock data on first launch

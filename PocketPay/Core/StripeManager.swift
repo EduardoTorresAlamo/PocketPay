@@ -19,6 +19,21 @@ protocol PaymentOutcomeDeciding {
     func isChargeApproved() -> Bool
 }
 
+/// Abstraction over the charge backend used by `PaymentManager`.
+///
+/// `PaymentManager` depends on this protocol rather than the concrete
+/// `StripeManager` so a deterministic test double (`MockStripeManager`) can be
+/// injected in unit tests. The production conformance is `StripeManager`.
+protocol PaymentGateway: AnyObject {
+    /// A localized error message populated when a charge fails.
+    var errorMessage: String? { get }
+    /// Processes a charge for the given amount.
+    ///
+    /// - Parameter amount: Charge amount in USD.
+    /// - Returns: `true` when the charge was approved; `false` on failure.
+    func processPayment(amount: Double) async -> Bool
+}
+
 /// Default outcome provider: approves a configurable fraction of charges at random.
 struct RandomPaymentOutcome: PaymentOutcomeDeciding {
     /// Probability in `0...1` that a charge is approved. Defaults to 90% so the
@@ -40,7 +55,7 @@ struct RandomPaymentOutcome: PaymentOutcomeDeciding {
 /// an artificial delay so the UI behaves realistically without a live Stripe
 /// account or backend server. Set it to `false` and add the `StripePaymentSheet`
 /// SPM package when moving to production.
-class StripeManager: ObservableObject {
+class StripeManager: ObservableObject, PaymentGateway {
     /// `true` while a payment is in flight; used to drive loading indicators.
     @Published var isProcessing = false
     /// A localized error message populated when a payment operation fails.
@@ -63,7 +78,6 @@ class StripeManager: ObservableObject {
         // When StripePaymentSheet is added, set the publishable key here so that
         // the SDK knows which Stripe account to charge:
         // StripeAPI.defaultPublishableKey = APIKeys.stripePublishableKey
-        print("⚠️ Stripe SDK not configured. Add StripePaymentSheet via Swift Package Manager.")
     }
 
     // MARK: - Process Payment

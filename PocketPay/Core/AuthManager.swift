@@ -34,7 +34,12 @@ class AuthManager: ObservableObject, AuthManaging {
     /// Shared singleton instance used throughout the app.
     static let shared = AuthManager()
 
-    private init() {
+    /// Persistence layer for the user profile. Injected so the domain model stays
+    /// unaware of storage and tests can substitute a double.
+    private let userRepository: any UserRepository
+
+    private init(userRepository: any UserRepository = KeychainUserRepository()) {
+        self.userRepository = userRepository
         // Check if user is already logged in (from UserDefaults or Keychain in production)
         checkAuthStatus()
     }
@@ -58,13 +63,13 @@ class AuthManager: ObservableObject, AuthManaging {
         // Mock authentication - in production, call your backend API
         if username.lowercased() == "demo" && password == "password" {
             // Load saved user or use mock user
-            var user = User.load() ?? User.mockUser
+            var user = userRepository.load() ?? User.mockUser
             user.username = username
             currentUser = user
             isAuthenticated = true
             errorMessage = nil
             // Save user for persistence
-            user.save()
+            userRepository.save(user)
             return true
         } else {
             errorMessage = "Invalid username or password"
@@ -105,7 +110,7 @@ class AuthManager: ObservableObject, AuthManaging {
 
             if success {
                 // Load saved user or use mock user
-                let user = User.load() ?? User.mockUser
+                let user = userRepository.load() ?? User.mockUser
                 currentUser = user
                 isAuthenticated = true
                 errorMessage = nil
@@ -127,7 +132,7 @@ class AuthManager: ObservableObject, AuthManaging {
         currentUser = nil
         errorMessage = nil
         // Note: We don't clear the saved user data, so profile info persists
-        // If you want to clear it completely, uncomment: User.clearSaved()
+        // If you want to clear it completely, uncomment: userRepository.clear()
     }
 
     /// Applies a signed delta to the current user's balance and persists the result.
@@ -141,7 +146,18 @@ class AuthManager: ObservableObject, AuthManaging {
         guard var user = currentUser else { return }
         user.balance += delta
         currentUser = user
-        user.save()
+        userRepository.save(user)
+    }
+
+    /// Applies edited profile fields to the current user and persists the result.
+    ///
+    /// `AuthManager` is the single writer of the user model, so profile edits from
+    /// `ProfileView` are routed here rather than persisting the model directly.
+    ///
+    /// - Parameter user: The updated user profile to publish and persist.
+    func updateProfile(_ user: User) {
+        currentUser = user
+        userRepository.save(user)
     }
 
     private func checkAuthStatus() {
