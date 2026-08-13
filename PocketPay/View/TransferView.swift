@@ -66,7 +66,7 @@ struct TransferView: View {
             } message: {
                 Text("You've successfully sent \(viewModel.getFormattedAmount()) to \(viewModel.selectedContact?.name ?? "recipient")")
             }
-            .alert("Transfer Failed", isPresented: .constant(viewModel.errorMessage != nil)) {
+            .alert("Transfer Failed", isPresented: $viewModel.showTransferError) {
                 Button("OK") {
                     viewModel.errorMessage = nil
                 }
@@ -98,9 +98,7 @@ struct ContactSelectionView: View {
 
                 TextField("Enter name or phone number", text: $viewModel.searchText)
                     .font(AppConstants.Typography.body)
-                    .onChange(of: viewModel.searchText) { _, _ in
-                        viewModel.searchContacts()
-                    }
+                    
 
                 if !viewModel.searchText.isEmpty {
                     Button(action: {

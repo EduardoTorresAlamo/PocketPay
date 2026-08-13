@@ -113,7 +113,7 @@ class AuthManager: ObservableObject, AuthManaging {
             return success
         } catch {
             // LAError codes include userCancel, authenticationFailed, etc.
-            errorMessage = error.localizedDescription
+            errorMessage = "Authentication failed. Please try again."
             return false
         }
     }
@@ -128,6 +128,20 @@ class AuthManager: ObservableObject, AuthManaging {
         errorMessage = nil
         // Note: We don't clear the saved user data, so profile info persists
         // If you want to clear it completely, uncomment: User.clearSaved()
+    }
+
+    /// Applies a signed delta to the current user's balance and persists the result.
+    ///
+    /// No-op when there is no authenticated user. Reassigning `currentUser`
+    /// publishes the change so observing views update, and `save()` persists the
+    /// new balance to the Keychain so it survives relaunch.
+    ///
+    /// - Parameter delta: Amount to add to the balance; pass a negative value to deduct.
+    func updateBalance(by delta: Double) {
+        guard var user = currentUser else { return }
+        user.balance += delta
+        currentUser = user
+        user.save()
     }
 
     private func checkAuthStatus() {

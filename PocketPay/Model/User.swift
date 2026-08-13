@@ -9,7 +9,7 @@ import Foundation
 
 /// The authenticated user's profile and financial state.
 ///
-///  is a value type so mutations (e.g., balance updates) are explicit.
+/// `User` is a value type so mutations (e.g., balance updates) are explicit.
 struct User: Identifiable, Codable {
     let id: UUID
     var username: String
@@ -62,7 +62,7 @@ extension User {
         KeychainManager.save(self, key: User.keychainKey)
     }
 
-    /// Decodes and returns the user from Keychain, or  if none exists.
+    /// Decodes and returns the user from Keychain, or `nil` if none exists.
     static func load() -> User? {
         let user: User? = KeychainManager.load(key: keychainKey)
         return user

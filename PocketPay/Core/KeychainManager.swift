@@ -6,27 +6,45 @@
 //
 import Foundation
 import Security
+import os
 
 /// Wrapper around iOS Keychain Services for secure persistence of sensitive data.
 ///
-/// Use this instead of  for PII, card metadata, and auth tokens.
+/// Use this instead of `UserDefaults` for PII, card metadata, and auth tokens.
 /// Data is encrypted at rest and accessible only to this app on this device.
 struct KeychainManager {
     private static let service = "com.pocketpay.keychain"
+    /// Structured logger; never logs the stored value, only the operation status.
+    private static let log = Logger(subsystem: "com.pocketpay", category: "Keychain")
 
-    /// Saves a  value to the Keychain.
-    static func save<T: Codable>(_ value: T, key: String) {
-        guard let data = try? JSONEncoder().encode(value) else { return }
+    /// Saves a `Codable` value to the Keychain.
+    ///
+    /// Both the delete and add `OSStatus` results are validated so a silent
+    /// failure (e.g., the device is locked or the Keychain is out of quota) is
+    /// surfaced to the log instead of being swallowed.
+    ///
+    /// - Returns: `true` when the item was written successfully.
+    @discardableResult
+    static func save<T: Codable>(_ value: T, key: String) -> Bool {
+        guard let data = try? JSONEncoder().encode(value) else {
+            log.error("Failed to encode value for key \(key, privacy: .public)")
+            return false
+        }
 
-        // Delete existing item first to avoid duplication
+        // Delete existing item first to avoid duplication. errSecItemNotFound is
+        // expected on first write and is not treated as a failure.
         let deleteQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key
         ]
-        SecItemDelete(deleteQuery as CFDictionary)
+        let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
+        guard deleteStatus == errSecSuccess || deleteStatus == errSecItemNotFound else {
+            log.error("Keychain delete failed for key \(key, privacy: .public): OSStatus \(deleteStatus)")
+            return false
+        }
 
-        // Add new item with access control (accessible when unlocked)
+        // Add new item with access control (accessible when unlocked, this device only).
         let addQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -34,10 +52,15 @@ struct KeychainManager {
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
-        SecItemAdd(addQuery as CFDictionary, nil)
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            log.error("Keychain add failed for key \(key, privacy: .public): OSStatus \(addStatus)")
+            return false
+        }
+        return true
     }
 
-    /// Loads a  value from the Keychain, or returns  if not found.
+    /// Loads a `Codable` value from the Keychain, or returns `nil` if not found.
     static func load<T: Codable>(key: String) -> T? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -58,21 +81,37 @@ struct KeychainManager {
     }
 
     /// Deletes a value from the Keychain.
-    static func delete(key: String) {
+    ///
+    /// - Returns: `true` when the item was removed or did not exist.
+    @discardableResult
+    static func delete(key: String) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            log.error("Keychain delete failed for key \(key, privacy: .public): OSStatus \(status)")
+            return false
+        }
+        return true
     }
 
     /// Clears all PocketPay Keychain items.
-    static func clearAll() {
+    ///
+    /// - Returns: `true` when the items were removed or none existed.
+    @discardableResult
+    static func clearAll() -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            log.error("Keychain clearAll failed: OSStatus \(status)")
+            return false
+        }
+        return true
     }
 }

@@ -64,6 +64,11 @@ class ServicesViewModel: ObservableObject {
     private let paymentManager: any PaymentProcessing
     private let calendarManager: CalendarManager
 
+    /// Keychain account name under which the recurring-payment list is persisted.
+    private static let recurringKeychainKey = "com.pocketpay.recurring_payments"
+    /// `true` once the persisted list has been read, so later refreshes don't clobber edits.
+    private var hasLoadedFromStore = false
+
     /// Creates the ViewModel with the given collaborators.
     ///
     /// Both default to the shared singletons so views can keep calling
@@ -78,8 +83,18 @@ class ServicesViewModel: ObservableObject {
     }
 
     /// Refreshes all derived payment lists from the current `recurringPayments` array.
+    ///
+    /// The first call restores the list from the Keychain, falling back to the mock
+    /// data set when nothing has been persisted yet. Later calls keep whatever is
+    /// already in memory and write it back, so edits are never overwritten by mocks.
     func loadRecurringPayments() {
-        recurringPayments = RecurringPayment.mockRecurringPayments
+        if !hasLoadedFromStore {
+            let saved: [RecurringPayment]? = KeychainManager.load(key: Self.recurringKeychainKey)
+            recurringPayments = saved ?? RecurringPayment.mockRecurringPayments
+            hasLoadedFromStore = true
+        }
+        KeychainManager.save(recurringPayments, key: Self.recurringKeychainKey)
+
         activePayments = recurringPayments.filter { $0.isActive }
         duePayments = recurringPayments.filter { $0.isActive && $0.isDueSoon }
     }
@@ -157,7 +172,6 @@ class ServicesViewModel: ObservableObject {
 
             // Add to Calendar if enabled
             if addToCalendarEnabled {
-                print("📱 ServicesViewModel: Creating calendar event...")
                 let calendarSuccess = await calendarManager.createRecurringPaymentEvent(
                     title: "Pay \(billerName)",
                     notes: notes.isEmpty ? nil : notes,
@@ -167,10 +181,7 @@ class ServicesViewModel: ObservableObject {
                 )
 
                 if !calendarSuccess {
-                    print("❌ ServicesViewModel: Calendar event creation failed")
                     errorMessage = "Payment created but calendar event failed. Check calendar permissions."
-                } else {
-                    print("✅ ServicesViewModel: Calendar event created successfully")
                 }
             }
 
@@ -222,7 +233,7 @@ class ServicesViewModel: ObservableObject {
 
     /// Returns the current form amount formatted as a USD currency string.
     func getFormattedAmount() -> String {
-        return String(format: "$%.2f", amount)
+        return CurrencyFormatter.format(amount)
     }
 
     /// Filters active payments by their `TransactionCategory`.
@@ -242,9 +253,9 @@ class ServicesViewModel: ObservableObject {
             // Normalize each payment frequency to a monthly equivalent cost.
             switch payment.frequency {
             case .weekly:
-                return total + (payment.amount * 4)
+                return total + (payment.amount * 52.0 / 12.0)
             case .biWeekly:
-                return total + (payment.amount * 2)
+                return total + (payment.amount * 26.0 / 12.0)
             case .monthly:
                 return total + payment.amount
             case .quarterly:

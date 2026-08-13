@@ -121,7 +121,7 @@ struct RecurringPayment: Identifiable, Codable {
 
     /// Amount formatted as a currency string, e.g., `"$125.50"`.
     var formattedAmount: String {
-        return String(format: "$%.2f", amount)
+        return CurrencyFormatter.format(amount)
     }
 
     /// Next payment date formatted as `"Jan 5, 2026"`.

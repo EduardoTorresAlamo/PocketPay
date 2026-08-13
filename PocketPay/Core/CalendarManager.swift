@@ -8,6 +8,7 @@
 import Foundation
 import EventKit
 import Combine
+import os
 
 /// Manages EventKit calendar permissions and creates payment-related calendar events.
 ///
@@ -18,6 +19,9 @@ import Combine
 class CalendarManager: ObservableObject {
     /// Backing `EKEventStore` used for all EventKit read/write operations.
     private let eventStore = EKEventStore()
+    /// Structured logger. Payment titles/notes are user PII, so they are never
+    /// interpolated into log messages (which land in the system syslog).
+    private let log = Logger(subsystem: "com.pocketpay", category: "Calendar")
     /// Reflects the current calendar authorization state so the UI can show
     /// appropriate prompts or disabled states.
     @Published var authorizationStatus: EKAuthorizationStatus = .notDetermined
@@ -43,69 +47,20 @@ class CalendarManager: ObservableObject {
     ///
     /// - Returns: `true` when the user granted access; `false` when denied or on error.
     func requestAccess() async -> Bool {
-        print("📅 CalendarManager: Requesting calendar access...")
         do {
             let granted = try await eventStore.requestFullAccessToEvents()
             await MainActor.run {
                 self.authorizationStatus = EKEventStore.authorizationStatus(for: .event)
-                print("📅 CalendarManager: Authorization status: \(self.authorizationStatus.rawValue)")
             }
-            if granted {
-                print("✅ CalendarManager: User granted calendar access")
-            } else {
-                print("❌ CalendarManager: User denied calendar access")
-            }
+            log.info("Calendar access request granted: \(granted, privacy: .public)")
             return granted
         } catch {
-            print("❌ CalendarManager: Calendar access error: \(error.localizedDescription)")
+            log.error("Calendar access request failed")
             return false
         }
     }
 
     // MARK: - Event Creation with Smart Reminders
-
-    /// Creates a calendar event for a recurring payment with a custom reminder offset
-    /// - Parameters:
-    ///   - title: Event title (e.g., "Pay Electric Bill")
-    ///   - notes: Additional notes about the payment
-    ///   - dueDate: When the payment is due
-    ///   - reminderOffset: Days before due date to remind (1, 2, or 3)
-    /// - Returns: Success status
-    func createPaymentEvent(
-        title: String,
-        notes: String?,
-        dueDate: Date,
-        reminderOffset: Int = 1
-    ) async -> Bool {
-        // Ensure we have access
-        if !(authorizationStatus == .fullAccess || authorizationStatus == .authorized) {
-            guard await requestAccess() else { return false }
-        }
-
-        // Create the event
-        let event = EKEvent(eventStore: eventStore)
-        event.title = title
-        event.notes = notes
-        event.calendar = eventStore.defaultCalendarForNewEvents
-
-        // Set the event to the due date (all-day event)
-        event.startDate = dueDate
-        event.endDate = dueDate
-        event.isAllDay = true
-
-        // Add Smart Reminder with relative offset
-        let alarm = createSmartReminder(for: reminderOffset)
-        event.addAlarm(alarm)
-
-        // Save the event
-        do {
-            try eventStore.save(event, span: .thisEvent)
-            return true
-        } catch {
-            print("Error saving calendar event: \(error.localizedDescription)")
-            return false
-        }
-    }
 
     /// Creates a recurring calendar event for subscription payments
     /// - Parameters:
@@ -122,26 +77,19 @@ class CalendarManager: ObservableObject {
         frequency: PaymentFrequency,
         reminderOffset: Int = 1
     ) async -> Bool {
-        print("📅 CalendarManager: Starting to create recurring event '\(title)'")
-
         // Ensure we have access
         if !(authorizationStatus == .fullAccess || authorizationStatus == .authorized) {
-            print("📅 CalendarManager: Not authorized, requesting access...")
             guard await requestAccess() else {
-                print("❌ CalendarManager: Access denied")
+                log.info("Recurring event not created: calendar access denied")
                 return false
             }
-            print("✅ CalendarManager: Access granted")
-        } else {
-            print("✅ CalendarManager: Already authorized")
         }
 
         // Verify we have a default calendar
         guard let defaultCalendar = eventStore.defaultCalendarForNewEvents else {
-            print("❌ CalendarManager: No default calendar available")
+            log.error("Recurring event not created: no default calendar available")
             return false
         }
-        print("📅 CalendarManager: Using calendar: \(defaultCalendar.title)")
 
         // Create the event
         let event = EKEvent(eventStore: eventStore)
@@ -154,25 +102,21 @@ class CalendarManager: ObservableObject {
         event.endDate = startDate
         event.isAllDay = true
 
-        print("📅 CalendarManager: Event date: \(startDate)")
-
         // Set up recurrence rule based on frequency
         let recurrenceRule = createRecurrenceRule(for: frequency)
         event.addRecurrenceRule(recurrenceRule)
-        print("📅 CalendarManager: Recurrence rule: \(frequency.rawValue)")
 
         // Add Smart Reminder
         let alarm = createSmartReminder(for: reminderOffset)
         event.addAlarm(alarm)
-        print("📅 CalendarManager: Reminder: \(reminderOffset) day(s) before")
 
         // Save the event
         do {
             try eventStore.save(event, span: .futureEvents)
-            print("✅ CalendarManager: Event saved successfully!")
+            log.info("Recurring payment event saved")
             return true
         } catch {
-            print("❌ CalendarManager: Error saving event: \(error.localizedDescription)")
+            log.error("Failed to save recurring payment event")
             return false
         }
     }

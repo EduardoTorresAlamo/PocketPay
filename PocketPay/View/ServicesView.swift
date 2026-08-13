@@ -129,7 +129,7 @@ struct SummaryCard: View {
                         .font(AppConstants.Typography.caption)
                         .foregroundColor(AppConstants.Colors.secondaryLabel)
 
-                    Text(String(format: "$%.2f", totalRecurring))
+                    Text(CurrencyFormatter.format(totalRecurring))
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(AppConstants.Colors.primaryPurple)
                 }

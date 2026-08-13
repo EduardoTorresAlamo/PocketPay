@@ -43,6 +43,12 @@ class TransferViewModel: ObservableObject {
     @Published var showingSuccess = false
     /// Holds the error message when a payment attempt fails.
     @Published var errorMessage: String?
+    var showTransferError: Bool {
+        get { errorMessage != nil }
+        set { if !newValue { errorMessage = nil } }
+    }
+
+    private var cancellables = Set<AnyCancellable>()
 
     private let paymentManager: any PaymentProcessing
 
@@ -53,6 +59,14 @@ class TransferViewModel: ObservableObject {
     init(paymentManager: any PaymentProcessing = PaymentManager.shared) {
         self.paymentManager = paymentManager
         loadContacts()
+
+        // Debounce search input to avoid filtering on every keystroke
+        $searchText
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.searchContacts()
+            }
+            .store(in: &cancellables)
     }
 
     /// Loads the mock contact list and initializes the filtered view.
@@ -63,7 +77,7 @@ class TransferViewModel: ObservableObject {
 
     /// Filters `contacts` by name or phone number to update `filteredContacts`.
     ///
-    /// Called whenever `searchText` changes via `onChange` in `ContactSelectionView`.
+    /// Called via Combine debounce publisher when `searchText` changes.
     func searchContacts() {
         if searchText.isEmpty {
             filteredContacts = contacts
@@ -100,7 +114,7 @@ class TransferViewModel: ObservableObject {
     ///
     /// - Parameter digit: A single-character digit string (`"0"` through `"9"`).
     func appendDigit(_ digit: String) {
-        let currentAmountString = String(format: "%.2f", amount)
+        let currentAmountString = CurrencyFormatter.plain(amount)
         let components = currentAmountString.split(separator: ".")
 
         if components.count == 2 {
@@ -129,7 +143,7 @@ class TransferViewModel: ObservableObject {
     /// amount = 1.50  -> delete -> 0.15
     /// ```
     func deleteLastDigit() {
-        let currentAmountString = String(format: "%.2f", amount)
+        let currentAmountString = CurrencyFormatter.plain(amount)
         let components = currentAmountString.split(separator: ".")
 
         if components.count == 2 {
@@ -159,7 +173,7 @@ class TransferViewModel: ObservableObject {
 
     /// Returns the current amount formatted as a USD currency string (e.g., `"$25.00"`).
     func getFormattedAmount() -> String {
-        return String(format: "$%.2f", amount)
+        return CurrencyFormatter.format(amount)
     }
 
     /// `true` when both a recipient contact is selected and the amount is greater than zero.

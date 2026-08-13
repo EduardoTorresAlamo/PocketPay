@@ -78,7 +78,7 @@ class HomeViewModel: ObservableObject {
     /// - Returns: e.g., `"$1,250.00"`, or `"$0.00"` when no user is loaded.
     func getFormattedBalance() -> String {
         guard let balance = currentUser?.balance else { return "$0.00" }
-        return String(format: "$%.2f", balance)
+        return CurrencyFormatter.format(balance)
     }
 
     /// Alias for `loadData()` used by pull-to-refresh handlers.

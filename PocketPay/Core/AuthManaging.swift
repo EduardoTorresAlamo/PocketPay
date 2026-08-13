@@ -34,4 +34,12 @@ protocol AuthManaging: AnyObject {
     func authenticateWithBiometrics() async -> Bool
     /// Ends the current user session and resets all published auth state.
     func logout()
+    /// Applies a signed delta to the current user's balance and persists the result.
+    ///
+    /// Owning balance mutation here keeps `AuthManager` the single writer of the
+    /// user model; collaborators such as `PaymentManager` request a change rather
+    /// than reaching into `currentUser` directly.
+    ///
+    /// - Parameter delta: Amount to add to the balance; pass a negative value to deduct.
+    func updateBalance(by delta: Double)
 }

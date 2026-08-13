@@ -1,136 +1,74 @@
-# 📐 Reporte de Auditoría de Arquitectura y Diseño — PocketPay
+# 🏛️ REPORTE DE AUDITORÍA ARQUITECTÓNICA (ARCHITECTURE & CLEAN CODE) — POCKETPAY
 
-**Fecha:** 6 de Agosto, 2026  
-**Auditor:** Code Reviewer & Security Auditor Agent (`code-reviewer-auditor`)  
-**Alcance (Audit Scope):** Patrones MVVM, Inyección de Dependencias, Modularidad, Suite de Pruebas y Limpieza de Código
-
----
-
-## 🏗️ Resumen de Hallazgos de Arquitectura
-
-| ID | Severidad | Título / Área | Archivos Afectados | Estado |
-| :--- | :---: | :--- | :--- | :---: |
-| **ARC-01** | 🔴 CRÍTICO | Ausencia Total de Suite de Pruebas Unitarias y UI Tests | `PocketPay.xcodeproj` (Falta target de Tests) | PENDIENTE |
-| **ARC-02** | 🟠 ALTO | Acoplamiento Severo a Singletons e Imposibilidad de Mocks | [`PocketPay/Core/PaymentManager.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/PaymentManager.swift#L31-L36) | PENDIENTE |
-| **ARC-03** | 🟠 ALTO | Archivos de Código Legacy / Redundantes en la Raíz del Proyecto | `PocketPay/PocketPayApp.swift`, `PocketPay/ContentView.swift` | **RESUELTO ✅ (Eliminados)** |
-| **ARC-04** | 🟠 ALTO | Inconsistencia Identitaria de Marca y Naming (PocketPay vs PRPay) | [`PocketPay/Config/Constants.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Config/Constants.swift#L96), [`PocketPay/App/PRPayApp.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/App/PRPayApp.swift) | PENDIENTE |
-| **ARC-05** | 🟡 MEDIO | Mezcla de Estado de Presentación UI en ViewModels de Dominio | [`PocketPay/ViewModel/WalletViewModel.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/WalletViewModel.swift#L28) | PENDIENTE |
-| **ARC-06** | 🟡 MEDIO | Ausencia de Manejo de Errores Estructurado (`AppError` Enum) | [`PocketPay/Core/StripeManager.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/StripeManager.swift#L198) | PENDIENTE |
-| **ARC-07** | 🟢 BAJO | Falta de Separación de Capa de Red (Network Abstraction Layer) | Global Core | PENDIENTE |
+**Fecha:** 10 de Agosto, 2026  
+**Auditor Principal:** Antigravity Senior Security & Software Architect  
+**Alcance (Scope):** Evaluación de Acoplamiento, Gestión de Estado Reactive/Combine, Inyección de Dependencias y Buenas Prácticas SwiftUI  
 
 ---
 
-## 🏛️ Análisis Detallado de Arquitectura
+## 🔬 Análisis Arquitectónico Detallado
 
-### ARC-01: Ausencia Total de Suite de Pruebas Unitarias y UI Tests (🔴 CRÍTICO)
+### 🟠 ARC-01: Ausencia de Suscripción Reactiva (Combine) entre ViewModels y Singletons (ALTO)
+
+#### Ubicación
+[`PocketPay/ViewModel/HomeViewModel.swift:L40-L53`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/HomeViewModel.swift#L40-L53) & [`PocketPay/View/HomeView.swift:L133-L135`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/HomeView.swift#L133-L135)
 
 #### Diagnóstico
-El proyecto Xcode `PocketPay.xcodeproj` no posee ningún target de pruebas (`PocketPayTests` o `PocketPayUITests`).
+`HomeViewModel` mantiene copias locales de los datos:
+```swift
+@Published var currentUser: User?
+@Published var recentTransactions: [Transaction] = []
+```
+Sin embargo, `HomeViewModel` no se suscribe a las publicaciones `@Published` de `AuthManager.shared` ni de `PaymentManager.shared`. Solo toma una captura puntual de los datos en `init()` y en `loadData()`.
 
 #### Impacto
-- Las reglas de negocio financieras (validación de saldo suficiente, cálculo de comisiones, de-default de tarjetas) se prueban manualmente.
-- No existe barrera contra regresiones silenciosas en pipelines de CI/CD al modificar los managers de pagos.
+Si el usuario realiza una transferencia P2P desde `TransferView` o actualiza su nombre en `ProfileView`, la vista `HomeView` **no se entera del cambio** mientras permanezca montada en el árbol de vistas de SwiftUI, mostrando información desactualizada (saldo anterior, transacciones viejas) hasta que se fuerce un `.onAppear`.
+
+#### Solución
+En `HomeViewModel`, suscribir los editores de Combine a las fuentes de verdad:
+```swift
+authManager.currentUserPublisher
+    .receive(on: RunLoop.main)
+    .assign(to: &$currentUser)
+
+paymentManager.transactionsPublisher
+    .map { Array($0.prefix(5)) }
+    .receive(on: RunLoop.main)
+    .assign(to: &$recentTransactions)
+```
 
 ---
 
-### ARC-02: Acoplamiento Severo a Singletons concretos (🟠 ALTO)
+### 🟠 ARC-02: Violación de Principios SwiftUI / Uso Incorrecto de `@StateObject` con Singletons (ALTO)
+
+#### Ubicación
+[`PocketPay/View/WalletView.swift:L17`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/WalletView.swift#L17) & [`PocketPay/View/HistoryView.swift:L16-L20`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/HistoryView.swift#L16-L20)
 
 #### Diagnóstico
-[`PaymentManager`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/PaymentManager.swift) y los ViewModels ([`HomeViewModel`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/HomeViewModel.swift), [`TransferViewModel`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/TransferViewModel.swift)) consumen directamente los Singletons `.shared`:
-
+1. En `WalletView.swift`:
 ```swift
-private let stripeManager = StripeManager.shared
-private let authManager = AuthManager.shared
+@StateObject private var viewModel = WalletViewModel.shared
 ```
-
-#### Refactorización Propuesta con Protocolos (Inyección de Dependencias)
-
+En SwiftUI, `@StateObject` está diseñado para crear y poseer la vida útil de una instancia nueva de objeto observable. Usar `@StateObject` asignando una referencia singleton compartida (`WalletViewModel.shared`) destruye el ciclo de vida gestionado por SwiftUI y puede provocar fugas de estado y comportamientos impredecibles al destruir y recrear vistas.
+2. En `HistoryView.swift`:
 ```swift
-// 1. Contrato
-protocol PaymentProcessing {
-    func sendMoney(to contact: Contact, amount: Double, notes: String?) async -> Bool
-    func payBusiness(name: String, amount: Double, notes: String?) async -> Bool
-}
-
-// 2. Inyección
-class TransferViewModel: ObservableObject {
-    private let paymentManager: PaymentProcessing
-
-    init(paymentManager: PaymentProcessing = PaymentManager.shared) {
-        self.paymentManager = paymentManager
-    }
-}
+@StateObject private var servicesViewModel = ServicesViewModel()
 ```
+`HistoryView` crea una instancia desechable de `ServicesViewModel` únicamente para transferir su referencia a `TransactionDetailView`.
+
+#### Solución
+- Usar `@ObservedObject` o `@EnvironmentObject` para referencias compartidas o singletons.
+- Inyectar `ServicesViewModel` a través de la jerarquía de entorno o contenedor de dependencias.
 
 ---
 
-### ARC-03: Archivos Redundantes / Huérfanos (🟠 ALTO — RESUELTO ✅)
+### 🟡 ARC-03: Falta de Abstracción de Logging Centralizado (MEDIO)
 
-#### Diagnóstico Previos vs Estado Actual
-- **Previo:** Existían los archivos `PocketPay/PocketPayApp.swift` y `PocketPay/ContentView.swift` sin uso.
-- **Estado Actual:** ✅ **Resuelto**. Ambos archivos fueron eliminados. [`PRPayApp.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/App/PRPayApp.swift) actúa como el único punto de entrada `@main`.
-
----
-
-### ARC-04: Inconsistencia Identitaria y Naming (PocketPay vs PRPay) (🟠 ALTO)
+#### Ubicación
+Global en todos los componentes del sistema.
 
 #### Diagnóstico
-- La carpeta del proyecto y repositorio se llama **PocketPay**.
-- El punto de entrada se llama `PRPayApp.swift`.
-- Las constantes especifican `AppConstants.AppInfo.name = "PRPay"`.
-- Los logs y títulos de botones mencionan "PRPay" en lugar de "PocketPay".
+El proyecto carece de una capa o wrapper de logging (e.g. `AppLogger`). Todo el rastreo se realiza mediante directivas `print()` dispersas en clases de negocio como `CalendarManager`.
 
-#### Acción Recomendada
-Estandarizar todo el código bajo la marca única **PocketPay**:
-1. Renombrar `PRPayApp.swift` a `PocketPayApp.swift`.
-2. Actualizar `AppConstants.AppInfo.name = "PocketPay"`.
-
----
-
-## 🎨 Diagrama de Arquitectura Objetivo
-
-```mermaid
-graph TD
-    subgraph Views [Vistas SwiftUI]
-        V1[HomeView]
-        V2[TransferView]
-        V3[WalletView]
-        V4[ServicesView]
-    end
-
-    subgraph ViewModels [ViewModels - Protocol Driven]
-        VM1[HomeViewModel]
-        VM2[TransferViewModel]
-        VM3[WalletViewModel]
-        VM4[ServicesViewModel]
-    end
-
-    subgraph Abstractions [Protocolos de Servicio]
-        P1[AuthManaging]
-        P2[PaymentProcessing]
-        P3[StripeProcessing]
-        P4[CalendarManaging]
-    end
-
-    subgraph CoreServices [Implementaciones Core & Keychain]
-        S1[AuthManager / KeychainManager]
-        S2[PaymentManager]
-        S3[StripeManager]
-        S4[CalendarManager]
-    end
-
-    V1 --> VM1
-    V2 --> VM2
-    V3 --> VM3
-    V4 --> VM4
-
-    VM1 -.-> P1 & P2
-    VM2 -.-> P2
-    VM3 -.-> P2
-    VM4 -.-> P2 & P4
-
-    S1 .-> P1
-    S2 .-> P2
-    S3 .-> P3
-    S4 .-> P4
-```
+#### Solución
+Crear un módulo `Utility/Logger.swift` basado en `os.Logger` para categorizar registros en subsistemas (`.auth`, `.payments`, `.calendar`) con control de niveles en entornos de Release vs Debug.

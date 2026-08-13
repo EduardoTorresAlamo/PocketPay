@@ -37,14 +37,17 @@ struct WalletView: View {
                         .frame(height: 240)
                         .padding(.top, 16)
 
-                        // Card Actions
-                        if !viewModel.paymentMethods.isEmpty {
+                        // Card Actions — only rendered while the index still points at a card,
+                        // since removals can leave `selectedCardIndex` past the end of the array.
+                        if selectedCardIndex >= 0, selectedCardIndex < viewModel.paymentMethods.count {
                             CardActionsView(
                                 card: viewModel.paymentMethods[selectedCardIndex],
                                 setAsDefaultAction: {
+                                    guard selectedCardIndex < viewModel.paymentMethods.count else { return }
                                     viewModel.setDefaultPaymentMethod(viewModel.paymentMethods[selectedCardIndex])
                                 },
                                 removeAction: {
+                                    guard selectedCardIndex < viewModel.paymentMethods.count else { return }
                                     viewModel.removePaymentMethod(viewModel.paymentMethods[selectedCardIndex])
                                     if selectedCardIndex > 0 {
                                         selectedCardIndex -= 1

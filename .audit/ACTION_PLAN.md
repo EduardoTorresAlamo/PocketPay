@@ -1,82 +1,35 @@
-# 🛠️ Plan de Acción y Remediaciones Priorizadas — PocketPay
+# 📋 PLAN DE ACCIÓN Y REMEDIACIÓN DE SEVERIDAD REAL — POCKETPAY
 
-**Fecha:** 6 de Agosto, 2026  
-**Objetivo:** Guía de ejecución priorizada paso a paso para resolver los hallazgos de auditoría en el repositorio **PocketPay**.
-
----
-
-## 🎯 Mapa de Ruta por Fases (Roadmap)
-
-```mermaid
-timeline
-    title Plan de Remediación PocketPay
-    Fase 1 : Seguridad Inmediata & Limpieza : Migración a Keychain (SEC-01, SEC-03)
-           : Eliminar Secrets (SEC-04)
-           : Limpieza Archivos Legacy (ARC-03)
-    Fase 2 : Arquitectura & Pruebas : Crear Target PocketPayTests (ARC-01)
-           : Protocolos para Managers (ARC-02)
-           : Estandarizar Marca PocketPay (ARC-04)
-    Fase 3 : Optimización & Backend : Anotación @MainActor (PRF-01)
-           : Debounce Búsquedas & Paginación (PRF-03, PRF-02)
-           : Integración Servidor Stripe Backend (SEC-02)
-```
+**Fecha:** 10 de Agosto, 2026  
+**Auditor Principal:** Antigravity Senior Security & Software Architect  
+**Estado de Verificación de Implementación:** ❌ **0% IMPLEMENTADO (0 DE 10 FIXES EN CÓDIGO FUENTE)**
 
 ---
 
-## 📋 Fase 1: Correcciones Críticas de Seguridad y Limpieza (COMPLETADA ✅)
+## 🎯 Hoja de Ruta Priorizada de Correcciones (Roadmap)
 
-### Task 1.1: Migrar Persistencia de `User` y `PaymentMethod` a Keychain (COMPLETADO ✅)
-- **Estado:** ✅ Completado. `KeychainManager.swift` encapsula `SecItemAdd`, `SecItemCopyMatching` y `SecItemDelete`. `User.save()`, `User.load()`, `PaymentMethod.saveAll()`, `PaymentMethod.loadAll()` operan exclusivamente sobre Keychain.
-- **Archivos Afiliados:** 
-  - [`PocketPay/Core/KeychainManager.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/KeychainManager.swift)
-  - [`PocketPay/Model/User.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Model/User.swift)
-  - [`PocketPay/Model/PaymentMethod.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Model/PaymentMethod.swift)
+### FASE 1: Remediación Crítica de Seguridad y Pérdida de Datos (Inmediato / Día 1-2)
 
-### Task 1.2: Eliminar `stripeSecretKey` de Código Cliente (COMPLETADO ✅)
-- **Estado:** ✅ Completado. La variable `stripeSecretKey` fue completamente eliminada de [`APIKeys.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Config/APIKeys.swift).
-
-### Task 1.3: Eliminar Archivos Obsoletos / Huérfanos (COMPLETADO ✅)
-- **Estado:** ✅ Completado. Se eliminaron los archivos redundantes `PocketPay/PocketPayApp.swift` y `PocketPay/ContentView.swift`.
+- [ ] **Fix BUG-01 (Saldo Reset):** Añadir `updatedUser.save()` en `PaymentManager` tras deducir balances en `sendMoney`, `payBusiness` y `makeDonation`. *(Estado actual: ❌ PENDIENTE)*
+- [ ] **Fix BUG-02 (Transacciones Wipe):** Implementar persistencia de transacciones en `KeychainManager` para que el historial no se borre al reiniciar la app. *(Estado actual: ❌ PENDIENTE)*
+- [ ] **Fix BUG-03 (Reset Recurrente):** Corregir `ServicesViewModel.loadRecurringPayments()` para no sobrescribir `recurringPayments` con datos mock al agregar/pagar cuentas. *(Estado actual: ❌ PENDIENTE)*
+- [ ] **Fix CODE-01 (Crash Tarjetas):** Insertar bounds check en `WalletView.swift` (`guard selectedCardIndex < paymentMethods.count`) para evitar crash fatal `Index out of range`. *(Estado actual: ❌ PENDIENTE)*
+- [ ] **Fix SEC-02 (Keychain OSStatus & Biometría Enclave):** Verificar el código de retorno `OSStatus` en `KeychainManager` y vincular ítems sensibles al Secure Enclave (`.biometryAny`). *(Estado actual: ❌ PENDIENTE)*
 
 ---
 
-## 📐 Fase 2: Refactorización de Arquitectura y Pruebas (Corto Plazo)
+### FASE 2: Concurrencia, Precisión Financiera y Rendimiento (Día 3-4)
 
-### Task 2.1: Crear Target de Pruebas Unitarias (`PocketPayTests`)
-- **Objetivo:** Cobertura de pruebas automatizadas para lógica financiera.
-- **Paso a Paso:**
-  1. En Xcode, añadir un nuevo Target de tipo **Unit Testing Bundle** (`PocketPayTests`).
-  2. Implementar pruebas unitarias para:
-     - `PaymentManager.sendMoney` (éxito, saldo insuficiente, monto cero).
-     - `AuthManager.login` (autenticación válida/inválida).
-     - `WalletViewModel.addPaymentMethod` (invariante de tarjeta por defecto única).
-
-### Task 2.2: Introducir Protocolos para Inyección de Dependencias
-- **Objetivo:** Desacoplar ViewModels de implementaciones concretas Singleton.
-- **Paso a Paso:**
-  1. Crear protocolo `PaymentProcessing` en `PaymentManager.swift`.
-  2. Crear protocolo `AuthManaging` en `AuthManager.swift`.
-  3. Actualizar los ViewModels para aceptar los protocolos en sus inicializadores con valores por defecto.
-
-### Task 2.3: Estandarizar Naming (PocketPay)
-- **Objetivo:** Coherencia de marca en todo el repositorio.
-- **Paso a Paso:**
-  1. Cambiar `AppConstants.AppInfo.name = "PRPay"` a `"PocketPay"`.
-  2. Renombrar `PRPayApp.swift` a `PocketPayApp.swift`.
-  3. Actualizar textos de UI de "PRPay" a "PocketPay".
+- [ ] **Fix BUG-04 (Double Spend Lock):** Añadir `guard !isProcessing else { return false }` al inicio de `PaymentManager.sendMoney` para bloquear concurrencia. *(Estado actual: ❌ PENDIENTE)*
+- [ ] **Fix BUG-06 (Keypad Internationalization):** Refactorizar `TransferViewModel` para trabajar con centavos enteros (`Int`) en lugar de manipulación de cadenas con coma flotante `Double`. *(Estado actual: ❌ PENDIENTE)*
+- [ ] **Fix PRF-01 (DateFormatter Allocations):** Extraer los `DateFormatter` a propiedades estáticas en `Transaction.swift` / `CurrencyFormatter.swift` para eliminar caídas de FPS en scroll. *(Estado actual: ❌ PENDIENTE)*
+- [ ] **Fix PRF-02 (Grouping CPU Blocking):** Mover el agrupamiento $O(N \log N)$ de `HistoryView.body` hacia `HistoryViewModel`. *(Estado actual: ❌ PENDIENTE)*
+- [ ] **Fix ARC-01 (State Sync):** Suscribir `HomeViewModel` via Combine a los editores `@Published` de `AuthManager` y `PaymentManager`. *(Estado actual: ❌ PENDIENTE)*
 
 ---
 
-## ⚡ Fase 3: Optimización de Concurrencia y Servidor (Mediano Plazo)
+### FASE 3: Infraestructura Backend & Supabase Integration (Día 5-7)
 
-### Task 3.1: Refactorizar Concurrencia con `@MainActor`
-- **Objetivo:** Eliminar dispatches repetitivos a `MainActor.run`.
-- **Paso a Paso:**
-  1. Anotar la declaración de clase de `PaymentManager`, `AuthManager` y ViewModels con `@MainActor`.
-  2. Simplificar el cuerpo de los métodos asíncronos removiendo `await MainActor.run { ... }`.
-
-### Task 3.2: Conexión Segura con Backend Backend (Stripe & JWT)
-- **Objetivo:** Reemplazar mocks por servicios de producción.
-- **Paso a Paso:**
-  1. Implementar cliente HTTP REST (`URLSession`) para comunicarse con la API backend.
-  2. Almacenar el JWT token en Keychain y adjuntarlo a las solicitudes HTTP de cobro.
+- [ ] **Integrar Supabase SDK:** Reemplazar `login(username:password:)` simulado con Supabase Auth real.
+- [ ] **Desplegar Database Schema:** Crear tablas PostgreSQL (`profiles`, `accounts`, `payment_methods`, `transactions`, `recurring_payments`) con RLS habilitado.
+- [ ] **Edge Functions:** Implementar Stripe Payment Intents y Webhooks en Supabase Edge Functions.

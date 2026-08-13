@@ -144,21 +144,32 @@ struct Transaction: Identifiable, Codable {
     /// Dollar amount with a `+` prefix for incoming and `-` for outgoing transactions.
     var formattedAmount: String {
         let prefix = isIncoming ? "+" : "-"
-        return "\(prefix)$\(String(format: "%.2f", amount))"
+        return "\(prefix)$\(CurrencyFormatter.plain(amount))"
     }
+
+    /// Shared date formatter (`"Jan 5, 2026"`). `DateFormatter` allocation is
+    /// expensive, so it is created once and reused across every list row.
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, yyyy"
+        return f
+    }()
+
+    /// Shared time formatter (`"3:45 PM"`), reused across every list row.
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f
+    }()
 
     /// Transaction date formatted as `"Jan 5, 2026"`.
     var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, yyyy"
-        return formatter.string(from: date)
+        return Transaction.dateFormatter.string(from: date)
     }
 
     /// Transaction time formatted as `"3:45 PM"`.
     var formattedTime: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
+        return Transaction.timeFormatter.string(from: date)
     }
 
     /// `true` when this transaction is linked to a recurring payment schedule.
