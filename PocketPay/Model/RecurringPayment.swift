@@ -72,7 +72,7 @@ enum PaymentFrequency: String, Codable, CaseIterable {
 /// `RecurringPayment` drives the Services tab. Each item tracks its schedule
 /// (`frequency`, `nextPaymentDate`), its status flags (`isActive`, `autoPayEnabled`),
 /// and links into `ServicesViewModel` for pay/toggle/delete actions.
-struct RecurringPayment: Identifiable, Codable {
+struct RecurringPayment: Identifiable, Codable, Hashable {
     /// Stable identifier used for list diffing and linking to `Transaction.recurringPaymentId`.
     let id: UUID
     /// Display name of the biller shown in the Services list.

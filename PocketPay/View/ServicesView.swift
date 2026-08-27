@@ -63,6 +63,9 @@ struct ServicesView: View {
             }
             .background(AppConstants.Colors.background.ignoresSafeArea())
             .navigationTitle("Services & Bills")
+            .navigationDestination(for: RecurringPayment.self) { payment in
+                RecurringPaymentDetailView(payment: payment, viewModel: viewModel)
+            }
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -103,6 +106,45 @@ struct ServicesView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Recurring Payment Detail
+
+/// Destination shown when a `RecurringPayment` value is pushed onto the
+/// Services `NavigationStack`.
+struct RecurringPaymentDetailView: View {
+    let payment: RecurringPayment
+    @ObservedObject var viewModel: ServicesViewModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppConstants.Spacing.large) {
+                DetailRow(label: "Biller", value: payment.billerName)
+                DetailRow(label: "Amount", value: payment.amount.formatted(.currency(code: "USD")))
+                DetailRow(label: "Frequency", value: payment.frequency.rawValue)
+                DetailRow(label: "Category", value: payment.category.rawValue)
+                DetailRow(label: "Next Payment", value: payment.nextPaymentDate.formatted(date: .abbreviated, time: .omitted))
+                DetailRow(label: "Status", value: payment.isActive ? "Active" : "Paused")
+
+                if let notes = payment.notes, !notes.isEmpty {
+                    DetailRow(label: "Notes", value: notes)
+                }
+
+                Button("Pay Now") {
+                    Task {
+                        await viewModel.payBill(payment: payment)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppConstants.Colors.primaryPurple)
+                .disabled(viewModel.isProcessing)
+            }
+            .padding(AppConstants.Spacing.medium)
+        }
+        .background(AppConstants.Colors.background.ignoresSafeArea())
+        .navigationTitle(payment.billerName)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
