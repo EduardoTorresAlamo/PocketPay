@@ -1,6 +1,6 @@
 //
 //  MainTabView.swift
-//  PRPay
+//  PocketPay
 //
 //  Created by Eduardo Torres on 1/21/26.
 //

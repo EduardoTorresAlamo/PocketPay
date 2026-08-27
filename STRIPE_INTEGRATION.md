@@ -1,7 +1,7 @@
-# Stripe Integration Guide for PRPay
+# Stripe Integration Guide for PocketPay
 
 ## Overview
-PRPay uses Stripe to process payments and simulate money transfers. This guide will help you integrate Stripe into the project.
+PocketPay uses Stripe to process payments and simulate money transfers. This guide will help you integrate Stripe into the project.
 
 ## Prerequisites
 1. A Stripe account (sign up at https://stripe.com)

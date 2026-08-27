@@ -94,7 +94,7 @@ static let useMockPayments = false
 ```
 PocketPay/
 ├── App/
-│   └── PRPayApp.swift          # App entry point
+│   └── PocketPayApp.swift          # App entry point
 ├── Config/
 │   ├── APIKeys.swift           # Stripe keys and mock flag
 │   └── Constants.swift         # Colors, spacing, app-wide constants

@@ -1,6 +1,6 @@
 //
 //  WalletView.swift
-//  PRPay
+//  PocketPay
 //
 //  Created by Eduardo Torres on 1/21/26.
 //
@@ -213,7 +213,7 @@ struct EmptyWalletView: View {
                 .fontWeight(.bold)
                 .foregroundColor(AppConstants.Colors.label)
 
-            Text("Add a payment method to start using PRPay")
+            Text("Add a payment method to start using PocketPay")
                 .font(AppConstants.Typography.body)
                 .foregroundColor(AppConstants.Colors.secondaryLabel)
                 .multilineTextAlignment(.center)

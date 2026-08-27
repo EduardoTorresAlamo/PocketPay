@@ -1,6 +1,6 @@
 //
 //  LoginView.swift
-//  PRPay
+//  PocketPay
 //
 //  Created by Eduardo Torres on 1/21/26.
 //
@@ -40,13 +40,13 @@ struct LoginView: View {
                         .fill(AppConstants.Colors.primaryPurple)
                         .frame(width: 100, height: 100)
                         .overlay(
-                            Text("PR")
+                            Text("PP")
                                 .font(AppConstants.Typography.largeTitle)
                                 .foregroundColor(.white)
                                 .bold()
                         )
 
-                    Text("PRPay")
+                    Text("PocketPay")
                         .font(AppConstants.Typography.largeTitle)
                         .foregroundColor(AppConstants.Colors.label)
                         .bold()

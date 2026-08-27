@@ -1,13 +1,13 @@
 //
 //  Constants.swift
-//  PRPay
+//  PocketPay
 //
 //  Created by Eduardo Torres on 1/21/26.
 //
 
 import SwiftUI
 
-/// Global design-system constants for the PRPay app.
+/// Global design-system constants for the PocketPay app.
 ///
 /// All values are grouped into nested namespaces so call sites read clearly:
 /// `AppConstants.Colors.primaryPurple`, `AppConstants.Spacing.medium`, etc.
@@ -93,7 +93,7 @@ struct AppConstants {
 
     /// Static metadata about the application used in Stripe configuration and UI labels.
     struct AppInfo {
-        static let name = "PRPay"
+        static let name = "PocketPay"
         static let version = "1.0.0"
         static let defaultCurrency = "USD"
         static let currencySymbol = "$"
