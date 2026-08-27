@@ -30,8 +30,7 @@ struct AddPaymentView: View {
                     HStack {
                         Text("$")
                             .foregroundColor(AppConstants.Colors.secondaryLabel)
-                        TextField("Amount", value: $viewModel.amount, format: .number)
-                            .keyboardType(.decimalPad)
+                        DecimalField(title: "Amount", value: $viewModel.amount)
                     }
 
                     Picker("Category", selection: $viewModel.selectedCategory) {

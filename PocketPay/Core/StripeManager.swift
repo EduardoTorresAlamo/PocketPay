@@ -104,7 +104,8 @@ class StripeManager: ObservableObject, PaymentGateway {
     /// - Parameter amount: Charge amount in USD (unused in mock mode).
     /// - Returns: `true` on simulated approval; `false` on simulated decline.
     private func mockProcessPayment(amount: Double) async -> Bool {
-        await MainActor.run {
+        await MainActor.run { [weak self] in
+            guard let self else { return }
             self.isProcessing = true
             self.errorMessage = nil
         }
@@ -114,7 +115,8 @@ class StripeManager: ObservableObject, PaymentGateway {
 
         let isSuccess = outcomeDecider.isChargeApproved()
 
-        await MainActor.run {
+        await MainActor.run { [weak self] in
+            guard let self else { return }
             self.isProcessing = false
             if !isSuccess {
                 self.errorMessage = "Payment failed. Please try again."

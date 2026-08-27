@@ -18,6 +18,9 @@ struct WalletView: View {
     /// Tracks which card is currently centered in the carousel, synchronized with
     /// the list row selection highlight below.
     @State private var selectedCardIndex = 0
+    /// Controls presentation of the `AddCardView` sheet. Pure view presentation
+    /// state, so it lives in the view rather than the ViewModel.
+    @State private var showingAddCard = false
 
     var body: some View {
         NavigationStack {
@@ -59,7 +62,7 @@ struct WalletView: View {
                     }
 
                     // Add New Card Button
-                    Button(action: { viewModel.showingAddCard = true }) {
+                    Button(action: { showingAddCard = true }) {
                         HStack {
                             Image(systemName: "plus.circle.fill")
                                 .font(.title2)
@@ -106,7 +109,7 @@ struct WalletView: View {
             .background(AppConstants.Colors.background.ignoresSafeArea())
             .navigationTitle("Wallet")
             .navigationBarTitleDisplayMode(.large)
-            .sheet(isPresented: $viewModel.showingAddCard) {
+            .sheet(isPresented: $showingAddCard) {
                 AddCardView(viewModel: viewModel)
             }
         }

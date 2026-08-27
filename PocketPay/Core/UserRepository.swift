@@ -24,6 +24,10 @@ protocol UserRepository {
 
 /// `UserRepository` backed by the iOS Keychain via `KeychainManager`.
 struct KeychainUserRepository: UserRepository {
+    // TODO: For production auth tokens, create the backing Keychain item with
+    // SecAccessControlCreateWithFlags using `.biometryCurrentSet` (see
+    // AuthManager.biometryAccessControl()) so the item is bound to the Secure
+    // Enclave and readable only after a live biometric challenge.
     private static let keychainKey = "com.pocketpay.current_user"
 
     func save(_ user: User) {

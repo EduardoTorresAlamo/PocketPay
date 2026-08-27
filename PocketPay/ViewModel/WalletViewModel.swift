@@ -28,8 +28,6 @@ class WalletViewModel: ObservableObject {
     /// The card currently highlighted in the carousel. Updated when the user
     /// swipes the card deck or taps a row in the list below.
     @Published var selectedPaymentMethod: PaymentMethod?
-    /// Controls presentation of the `AddCardView` sheet.
-    @Published var showingAddCard = false
 
     /// Shared instance used by both `WalletView` and `AddCardView`.
     static let shared = WalletViewModel()

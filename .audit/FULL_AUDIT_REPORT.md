@@ -1,211 +1,324 @@
-# 🛡️ REPORTE DE AUDITORÍA INTEGRAL Y REVISIÓN AGRESIVA DE SEGURIDAD — POCKETPAY
+# 🛡️ POCKETPAY FULL CODEBASE AUDIT & TECHNICAL REVIEW
 
-**Fecha de Auditoría:** 10 de Agosto, 2026  
-**Auditor Principal:** Antigravity Senior Security & Software Architect  
-**Repositorio Auditado:** `/Users/eduardotorres/Developer/XCodes/PocketPay`  
-**Alcance:** 100% del Código Fuente Swift (`PocketPay/*.swift`, `PocketPayTests/*.swift`)  
-**Nivel de Rigor:** 💥 **CRÍTICO AGRESIVO / SEVERIDAD REAL SIN DEGRADACIÓN**
-
----
-
-## 🛑 VEREDICTO DE AUDITORÍA Y ESTADO DE PRODUCCIÓN
-
-> ⚠️ **VEREDICTO DE SEGURIDAD:** **NO APTO PARA PRODUCCIÓN (UNSAFE FOR PRODUCTION)**.  
-> 
-> La aplicación presenta **6 Vulnerabilidades CRÍTICAS** y **12 Hallazgos de Severidad ALTA** que causan **pérdida directa de saldo y transacciones al reiniciar la app**, **crashes catastróficos por Index Out of Range en caliente**, **posibilidad de enviar múltiples cobros idénticos por Race Condition**, y **autenticación simulada que expone la app a derivaciones triviales de seguridad**.
+**Date:** August 26, 2026  
+**Auditor:** Antigravity Senior Security & Software Architect  
+**Repository:** `/Users/eduardotorres/Developer/XCodes/PocketPay`  
+**Scope:** 100% of Swift Source Code (`PocketPay/**/*.swift`, `PocketPayTests/**/*.swift`)  
+**Assessment Vectors:** Security, Code Quality & Bugs, Architecture & State Management, Performance & Resource Utilization  
+**Severity Scale:** 🔴 **CRITICAL** | 🟠 **HIGH** | 🟡 **MEDIUM** | 🟢 **LOW**  
 
 ---
 
-## 🔍 ESTADO DE IMPLEMENTACIÓN DE FIXES (`.audit/ACTION_PLAN.md`)
+## Executive Summary & Production Readiness Verdict
 
-Se ha realizado una verificación línea por línea en el código fuente Swift para determinar si los 10 arreglos propuestos en `.audit/ACTION_PLAN.md` fueron implementados.
-
-### **Resultado de la Verificación: 0 de 10 Fixes Implementados (0% de avance)**
-
-| ID Fix | Descripción en Action Plan | Archivo Afectado | Estado en Código Fuente | Resultado |
-| :--- | :--- | :--- | :--- | :---: |
-| **Fix BUG-01** | Persistir deducción de saldo con `user.save()` | [`PaymentManager.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/PaymentManager.swift#L110) | `authManager.currentUser?.balance -= amount` **sin llamar a `.save()`** | ❌ **PENDIENTE** |
-| **Fix BUG-02** | Persistir ledger de transacciones en Keychain | [`PaymentManager.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/PaymentManager.swift#L58) | `transactions = Transaction.mockTransactions` vive 100% en RAM | ❌ **PENDIENTE** |
-| **Fix BUG-03** | Evitar borrado de pagos recurrentes al recargar | [`ServicesViewModel.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/ServicesViewModel.swift#L82) | `loadRecurringPayments()` sobrescribe con `mockRecurringPayments` | ❌ **PENDIENTE** |
-| **Fix CODE-01**| Evitar crash `Index out of range` al borrar tarjeta | [`WalletView.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/WalletView.swift#L43) | Acceso directo `paymentMethods[selectedCardIndex]` sin guard | ❌ **PENDIENTE** |
-| **Fix SEC-02** | Validar `OSStatus` y enlazar Secure Enclave | [`KeychainManager.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/KeychainManager.swift#L37) | `SecItemAdd` y `SecItemDelete` ignoran `OSStatus` completamente | ❌ **PENDIENTE** |
-| **Fix BUG-04** | Bloquear Race Condition de doble gasto con `isProcessing` | [`PaymentManager.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/PaymentManager.swift#L72) | No existe `guard !isProcessing else { return false }` | ❌ **PENDIENTE** |
-| **Fix BUG-06** | Usar centavos enteros (`Int`) en lugar de `Double` | [`TransferViewModel.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/TransferViewModel.swift#L112) | Sigue usando `CurrencyFormatter.plain` con split `.` | ❌ **PENDIENTE** |
-| **Fix PRF-01** | Formateadores de fecha estáticos | [`Transaction.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Model/Transaction.swift#L152) | Crea `DateFormatter()` en cada llamada a propiedades calculadas | ❌ **PENDIENTE** |
-| **Fix PRF-02** | Mover agrupamiento $O(N \log N)$ fuera de SwiftUI body | [`HistoryView.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/HistoryView.swift#L140) | `groupedTransactions` se calcula dentro del `body` de SwiftUI | ❌ **PENDIENTE** |
-| **Fix ARC-01** | Suscribir `HomeViewModel` via Combine | [`HomeViewModel.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/HomeViewModel.swift#L50) | No hay suscripciones Combine, datos quedan desactualizados | ❌ **PENDIENTE** |
+> ### 🛑 Production Verdict: NOT PRODUCTION READY (UNSAFE)
+>
+> PocketPay has undergone significant improvements since initial milestones (e.g. Keychain persistence for user models and payment methods, race condition deduplication via `PaymentManager.processCharge`, and bounds checks in card carousels). 
+>
+> However, **3 CRITICAL vulnerabilities**, **5 HIGH severity flaws**, **5 MEDIUM issues**, and **4 LOW issues** remain in the active codebase. Most notably:
+> 1. **International Keypad Breakdown (Locale Lock)**: The custom numeric keypad splits amounts on decimal dots (`"."`), rendering amount entry completely inoperable in European, Latin American, and international locales using comma decimal separators (`,`).
+> 2. **Mock Authentication & Hardcoded Credentials**: Authentication accepts hardcoded credentials (`demo`/`password`) and issues self-proclaimed client-side session tokens without cryptographic server validation.
+> 3. **Unbound Biometrics**: LocalAuthentication challenges operate detached from Keychain Secure Enclave access control (`SecAccessControl`), enabling runtime bypasses on jailbroken devices.
+> 4. **Orphaned Primary Navigation**: `ServicesView` (Bills & Subscriptions) and `HistoryView` (Transaction History & Category Filtering) are completely absent from `MainTabView` and unreachable via primary application flows.
+> 5. **$O(N^2)$ Main Thread List Stutter**: `HistoryView.body` repeatedly computes dictionary grouping and sorting on every frame render and row iteration.
 
 ---
 
-## 📊 MATRIZ GENERAL DE HALLAZGOS Y SEVERIDAD REAL
+## 📊 Summary Matrix of Findings
 
-| Categoría | 🔴 CRÍTICO | 🟠 ALTO | 🟡 MEDIO | Total |
-| :--- | :---: | :---: | :---: | :---: |
-| **1. Seguridad y Autenticación** | 2 | 2 | 1 | **5** |
-| **2. Lógica de Negocio y Data Integrity** | 3 | 4 | 1 | **8** |
-| **3. Arquitectura y Reactividad** | 0 | 2 | 1 | **3** |
-| **4. Rendimiento y Optimización** | 0 | 2 | 1 | **3** |
-| **5. Dead Code y Code Smells** | 0 | 1 | 2 | **3** |
-| **6. Supabase & Backend Infrastructure** | 1 | 1 | 0 | **2** |
-| **TOTAL** | **6** | **12** | **6** | **24** |
+| Assessment Domain | 🔴 CRITICAL | 🟠 HIGH | 🟡 MEDIUM | 🟢 LOW | Total |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **1. Security & Authentication** | 2 | 1 | 2 | 0 | **5** |
+| **2. Code Quality & Business Logic** | 1 | 2 | 2 | 2 | **7** |
+| **3. Architecture & Reactivity** | 0 | 2 | 1 | 1 | **4** |
+| **4. Performance & Memory** | 0 | 1 | 1 | 1 | **3** |
+| **TOTAL** | **3** | **6** | **6** | **4** | **19** |
 
 ---
 
-## 🚨 MATRIZ DETALLADA DE VULNERABILIDADES Y BUGS
+## 🚨 Detailed Findings by Domain
 
-### 1. 🔐 Bugs y Vulnerabilidades de Seguridad
+### 1. 🔐 Security & Authentication
 
-#### **SEC-01 (🔴 CRÍTICO): Autenticación Simulada y Hardcoded Credentials**
-- **Ubicación:** [`AuthManager.swift` (L54-L74)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/AuthManager.swift#L54-L74)
-- **Evidencia:**
+#### 🔴 SEC-01 (CRITICAL): Mock Authentication and Hardcoded Demo Credentials in Client Binary
+* **Location:** [`AuthManager.swift:L64-L78`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/AuthManager.swift#L64-L78), [`LoginView.swift:L128-L138`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/LoginView.swift#L128-L138)
+* **Mechanics:**
   ```swift
+  // AuthManager.swift
   if username.lowercased() == "demo" && password == "password" {
-      var user = User.load() ?? User.mockUser
-      ...
+      var user = userRepository.load() ?? User.mockUser
+      user.username = username
+      currentUser = user
+      isAuthenticated = true
+      errorMessage = nil
+      userRepository.save(user)
+      return true
   }
   ```
-- **Riesgo Real:** Autenticación estática sin verificación de firma ni emisión de JWT/OAuth. Cualquiera que compile la app puede ingresar a cualquier cuenta en modo demo sin control de servidor.
-
-#### **SEC-02 (🔴 CRÍTICO): Fallo en Keychain Services y Ausencia de Secure Enclave Access Control**
-- **Ubicación:** [`KeychainManager.swift` (L18-L77)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/KeychainManager.swift#L18-L77) & [`AuthManager.swift` (L84-L119)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/AuthManager.swift#L84-L119)
-- **Evidencia:**
-  - `SecItemDelete` y `SecItemAdd` no leen ni validan el retorno `OSStatus`.
-  - La autenticación biométrica usa `LAContext.evaluatePolicy` desvinculada del Keychain, lo que permite bypass mediante runtime hooking (Frida/Cycript) en dispositivos jailbroken.
-- **Riesgo Real:** Si la escritura en Keychain falla por cuota o estado de bloqueo del dispositivo, la app falla silenciosamente sin avisar al usuario. La biometría no ofrece protección criptográfica real.
-
-#### **SEC-03 (🟠 ALTO): Transmisión Financiera sin SSL Certificate Pinning ni Server Validation**
-- **Ubicación:** [`StripeManager.swift` (L62-L86)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/StripeManager.swift#L62-L86)
-- **Evidencia:** `URLSession.shared` sin delegate de TLS Validation ni validación de certificados de dominio en producción.
-- **Riesgo Real:** Ataques de Man-in-the-Middle (MitM) en redes Wi-Fi públicas para interceptar tokens de pago y datos financieros.
-
-#### **SEC-04 (🟠 ALTO): Filtrado de Datos Financieros y PII en Syslogs del Sistema**
-- **Ubicación:** [`CalendarManager.swift` (L46-L175)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/CalendarManager.swift#L46-L175)
-- **Evidencia:** Uso desmedido de `print("📅 CalendarManager: Starting to create recurring event '\(title)'")`.
-- **Riesgo Real:** Nombres de servicios, montos y notas personales quedan impresos en el syslog de iOS, accesible por utilidades de diagnóstico de terceros.
-
-#### **SEC-05 (🟡 MEDIO): Exposición de Mensajes de Error Internos en UI**
-- **Ubicación:** [`AuthManager.swift` (L116)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/AuthManager.swift#L116)
-- **Evidencia:** `errorMessage = error.localizedDescription`.
-- **Riesgo Real:** Expone rutas de archivos del sistema, nombres de clases y respuestas del SO a los usuarios finales.
+  `AuthManager.login` evaluates credentials against static in-memory strings (`"demo"` / `"password"`). The credentials are also explicitly rendered on the login screen (`LoginView`).
+* **Exploitability & Impact:** Anyone with access to the client binary or compiled app can authenticate as any user without backend credentials, session token verification, or password hashing (Argon2id/PBKDF2/bcrypt).
+* **Remediation:** Replace mock auth with OAuth2/PKCE or JWT token authentication against a secure backend (e.g. Supabase Auth / custom auth server). Store the issued refresh token in Keychain with biometric access control.
 
 ---
 
-### 2. 💸 Bugs de Lógica de Negocio, Data Loss y Concurrencia
-
-#### **BUG-01 (🔴 CRÍTICO): Pérdida de Saldo al Reiniciar la Aplicación (Data Loss)**
-- **Ubicación:** [`PaymentManager.swift` (L110, L169, L227)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/PaymentManager.swift#L110)
-- **Evidencia:**
+#### 🔴 SEC-02 (CRITICAL): Client-Side Payment Simulation & Missing Server-Side Payment Orchestration
+* **Location:** [`StripeManager.swift:L89-L100`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/StripeManager.swift#L89-L100), [`APIKeys.swift:L15-L26`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Config/APIKeys.swift#L15-L26)
+* **Mechanics:**
   ```swift
-  // Optimistically deduct balance from the in-memory user model.
-  authManager.currentUser?.balance -= amount
-  ```
-- **Riesgo Real:** `currentUser?.save()` **nunca es invocado**. Al cerrar y reabrir la app, `AuthManager` recarga el usuario desde Keychain y el saldo descontado se restaura mágicamente.
-
-#### **BUG-02 (🔴 CRÍTICO): Historial de Transacciones In-Memory Sin Persistencia**
-- **Ubicación:** [`PaymentManager.swift` (L27, L58, L107)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/PaymentManager.swift#L27)
-- **Evidencia:** `transactions` es una propiedad `@Published var transactions: [Transaction] = []` que solo se inicializa con `Transaction.mockTransactions`.
-- **Riesgo Real:** Cualquier transferencia realizada por el usuario desaparece por completo al reiniciar la aplicación.
-
-#### **BUG-03 (🔴 CRÍTICO): Borrado Automático de Servicios Recurrentes (Data Wipe)**
-- **Ubicación:** [`ServicesViewModel.swift` (L81-L85, L113, L178)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/ServicesViewModel.swift#L81-L85)
-- **Evidencia:**
-  ```swift
-  func loadRecurringPayments() {
-      recurringPayments = RecurringPayment.mockRecurringPayments
-      ...
+  func processPayment(amount: Double) async -> Bool {
+      if APIKeys.useMockPayments {
+          return await mockProcessPayment(amount: amount)
+      }
+      return false
   }
   ```
-  En `payBill`, `payOneTimeBill`, `togglePaymentStatus` y `deleteRecurringPayment`, la app modifica la lista y llama inmediatamente a `loadRecurringPayments()`, sobreescribiendo los cambios con los datos mock.
-- **Riesgo Real:** Al agregar o pagar un servicio recurrente, la lista se reinicia instantáneamente, borrando la acción del usuario.
-
-#### **BUG-04 (🟠 ALTO): Concurrencia y Race Condition en Envíos de Dinero (Double Spending)**
-- **Ubicación:** [`PaymentManager.swift` (L72-L88)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/PaymentManager.swift#L72-L88)
-- **Evidencia:** `sendMoney` carece de guard contra `isProcessing`.
-- **Riesgo Real:** Si el usuario presiona dos veces rápidamente el botón "Send Money", se ejecutan dos llamadas concurrentes a `stripeManager.processPayment`, duplicando la transacción y dejando el saldo en negativo.
-
-#### **BUG-05 (🟠 ALTO): Imprecisión Financiera por Aritmética de Punto Flotante IEEE 754**
-- **Ubicación:** Global (`Double` en Balances, Payments y Transactions)
-- **Evidencia:** Uso de `Double` para saldos y montos.
-- **Riesgo Real:** La acumulación de redondeos de coma flotante (`0.1 + 0.2 = 0.30000000000000004`) genera inconsistencias contables insostenibles en producción. Debe usarse `Decimal` o `Int` (centavos).
-
-#### **BUG-06 (🟠 ALTO): Fallo de Internacionalización y Ruptura del Keypad Numérico**
-- **Ubicación:** [`TransferViewModel.swift` (L112-L163)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/TransferViewModel.swift#L112-L163)
-- **Evidencia:** `appendDigit` convierte el monto con `CurrencyFormatter.plain(amount)` y divide la cadena por `"."`.
-- **Riesgo Real:** En dispositivos configurados en regiones donde el separador decimal es la coma (`,`), la división falla o la conversión `Double` retorna `0.0`, congelando el teclado.
-
-#### **BUG-07 (🟡 MEDIO): Error Matemático en la Normalización de Gastos Recurrentes**
-- **Ubicación:** [`ServicesViewModel.swift` (L240-L256)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/ServicesViewModel.swift#L240-L256)
-- **Evidencia:** `weekly` se multiplica por `4` y `biWeekly` por `2`.
-- **Riesgo Real:** Hay 52 semanas en un año (52/12 = 4.333 semanas/mes). Multiplicar por 4 asume 48 semanas, subestimando los costos recurrentes anuales en un 8.33%.
+  Payment authorization is simulated via `RandomPaymentOutcome` with a 2-second sleep. When mock mode is disabled, the method unconditionally fails (`return false`).
+* **Exploitability & Impact:** Real payments cannot settle. If the app were released with client-side flags, transactions and balances would update locally without real money transfer or Stripe ledger confirmation.
+* **Remediation:** Integrate Stripe SDK via Swift Package Manager (`StripePaymentSheet`). Implement server-side PaymentIntent creation (e.g., Supabase Edge Function) and pass the `client_secret` to the iOS client.
 
 ---
 
-### 3. 🏗️ Arquitectura Fragile y Reactividad
-
-#### **ARC-01 (🟠 ALTO): Desincronización de Estado entre `HomeViewModel` y Managers**
-- **Ubicación:** [`HomeViewModel.swift` (L40-L53)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/HomeViewModel.swift#L40-L53)
-- **Evidencia:** `loadData()` solo lee una foto estática al instanciarse. No hay suscripciones Combine a `AuthManager` o `PaymentManager`.
-- **Riesgo Real:** Al completar un pago en la pestaña Transferir, el saldo y las últimas transacciones en la pantalla de inicio permanecen desactualizados hasta que el usuario fuerce un pull-to-refresh.
-
-#### **ARC-02 (🟠 ALTO): Anti-Patrón SwiftUI `@StateObject` con Singleton Global**
-- **Ubicación:** [`WalletView.swift` (L17)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/WalletView.swift#L17)
-- **Evidencia:** `@StateObject private var viewModel = WalletViewModel.shared`.
-- **Riesgo Real:** `@StateObject` asume la propiedad del ciclo de vida del objeto. Instanciarlo con un singleton rompe la reinicialización de la vista y la gestión de memoria declarativa en SwiftUI.
-
-#### **ARC-03 (🟡 MEDIO): Ausencia de Servicio de Logging Estructurado**
-- **Ubicación:** Global
-- **Evidencia:** Impresiones arbitrarias mediante `print()`.
-- **Riesgo Real:** Imposibilidad de filtrar logs en producción con `OSLog` / `Logger` por subsistema y categoría.
+#### 🟠 SEC-03 (HIGH): Biometric Authentication Decoupled from Keychain Secure Enclave Access Control
+* **Location:** [`AuthManager.swift:L89-L133, L188-L200`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/AuthManager.swift#L89-L133), [`KeychainManager.swift:L48-L60`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/KeychainManager.swift#L48-L60)
+* **Mechanics:**
+  Biometric login calls `LAContext().evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics)`. On success, it calls `userRepository.load()`. However, the Keychain item is saved with `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` instead of requiring biometric access control (`SecAccessControlCreateWithFlags` with `.biometryCurrentSet`).
+  Although `AuthManager.biometryAccessControl()` is declared (L188-L200), it is a private unused helper.
+* **Exploitability & Impact:** On jailbroken or compromised devices, runtime instrumentation (e.g. Frida or Cycript hooking `LAContext evaluatePolicy`) can force biometric evaluation to return `true`, granting immediate access to the stored user profile.
+* **Remediation:** Bind the authentication token in Keychain using `SecAccessControl` with `.biometryCurrentSet` and `kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly`. Reading the item will then cryptographically require a valid hardware biometric assertion.
 
 ---
 
-### 4. ⚡ Rendimiento y Consumo de Memoria
-
-#### **PRF-01 (🟠 ALTO): Instanciación Repetitiva de `DateFormatter` en Filas de Listas**
-- **Ubicación:** [`Transaction.swift` (L151-L162)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Model/Transaction.swift#L151-L162)
-- **Evidencia:** `formattedDate` y `formattedTime` instancian `DateFormatter()` dentro de propiedades calculadas por cada celda visible.
-- **Riesgo Real:** La instanciación de `DateFormatter` es costosa en iOS. Produce caídas drásticas de FPS (stuttering) al desplazarse por el historial de transacciones.
-
-#### **PRF-02 (🟠 ALTO): Bloqueo del Hilo Principal por Agrupamiento $O(N \log N)$ en SwiftUI `body`**
-- **Ubicación:** [`HistoryView.swift` (L140-L144)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/HistoryView.swift#L140-L144)
-- **Evidencia:** `groupedTransactions` y `groupedTransactions.keys.sorted(by: >)` ejecutan agrupamiento y ordenamiento de arrays en cada ciclo de renderizado de `body`.
-- **Riesgo Real:** Bloqueo del Hilo Principal (Main Thread) en historiales con más de 50 elementos.
-
-#### **PRF-03 (🟡 MEDIO): Actor Hopping Fragmentado en `StripeManager`**
-- **Ubicación:** [`StripeManager.swift` (L114-L151)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/StripeManager.swift#L114-L151)
-- **Evidencia:** Múltiples bloques aislados `await MainActor.run` en una misma función asíncrona.
-- **Riesgo Real:** Hops innecesarios entre hilos de ejecución afectando la latencia de respuesta.
+#### 🟡 SEC-04 (MEDIUM): Exposure of Financial Notes and Payee Data in System EventKit Calendars
+* **Location:** [`CalendarManager.swift:L95-L98`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/CalendarManager.swift#L95-L98)
+* **Mechanics:**
+  `CalendarManager` writes `event.title = "Pay \(billerName)"` and `event.notes = notes` into the user's default system calendar.
+* **Exploitability & Impact:** System calendars are regularly synchronized across external services (Google, Exchange, iCloud) and accessible by any third-party app with calendar permissions. Unsanitized transaction memos may leak financial relationships or PII.
+* **Remediation:** Redact sensitive memo details or offer an explicit user opt-in before attaching custom notes to system calendar events.
 
 ---
 
-### 5. 🧹 Dead Code, Code Smells y Crashes
-
-#### **CODE-01 (🟠 ALTO): Crash en Tiempo de Ejecución por Índice Fuera de Rango (Index Out of Range)**
-- **Ubicación:** [`WalletView.swift` (L43-L52)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/WalletView.swift#L43-L52)
-- **Evidencia:** `viewModel.paymentMethods[selectedCardIndex]` se accede directamente sin verificar si `selectedCardIndex < paymentMethods.count`.
-- **Riesgo Real:** Al eliminar la última tarjeta o cambiar la lista, la app sufre un **crash fatal incondicional** (`Index out of range`).
-
-#### **CODE-02 (🟡 MEDIO): Funcionalidades Fantasma en la Interfaz (UI Mocking)**
-- **Ubicación:** [`ScanQRView.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/ScanQRView.swift) & [`AddPaymentView.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/AddPaymentView.swift)
-- **Evidencia:** Opciones como "Scan QR" y "Auto-Pay" muestran UI sin implementación real de cámara (AVFoundation) ni cobro automático.
-- **Riesgo Real:** Genera desconfianza y confusión en los usuarios.
-
-#### **CODE-03 (🟡 MEDIO): Anti-patrón SwiftUI `.alert` con Binding Constante**
-- **Ubicación:** [`TransferView.swift` (L69)](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/TransferView.swift#L69)
-- **Evidencia:** `.alert("Transfer Failed", isPresented: .constant(viewModel.errorMessage != nil))`
-- **Riesgo Real:** Warnings en la consola de SwiftUI y fallos al descartar la alerta.
+#### 🟡 SEC-05 (MEDIUM): Silent Mock Data Fallback on Keychain Storage Errors
+* **Location:** [`PaymentManager.swift:L60-L64`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/PaymentManager.swift#L60-L64), [`PaymentMethodRepository.swift:L34-L37`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/PaymentMethodRepository.swift#L34-L37), [`ServicesViewModel.swift:L88-L98`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/ServicesViewModel.swift#L88-L98)
+* **Mechanics:**
+  When `KeychainManager.load` returns `nil` (which occurs on clean install OR if the device is locked/keychain access fails), repositories fall back silently to `mockTransactions`, `mockPaymentMethods`, and `mockRecurringPayments`.
+* **Exploitability & Impact:** Transient Keychain failures due to device lock or OS errors can cause the app to display demo data to legitimate users, causing confusion regarding real financial records.
+* **Remediation:** Distinguish between "first launch (no record exists)" and "Keychain read failure (OSStatus error)", surfacing an error to the user rather than silently swapping real data for mock data.
 
 ---
 
-## ☁️ 6. INTEGRAIÓN BACKEND & SUPABASE (SUP-01 / SUP-02)
+### 2. 🐛 Code Quality & Business Logic
 
-Para habilitar persistencia y autenticación real, se requiere la infraestructura backend descrita en `.audit/SUPABASE_SCHEMA_AUDIT.md`:
-1. **Supabase Auth**: Reemplazar la autenticación mock por tokens JWT de Supabase.
-2. **Tablas PostgreSQL y RLS**: Creación de las tablas `profiles`, `accounts`, `payment_methods`, `transactions` y `recurring_payments` con aislamiento Row-Level Security por `auth.uid()`.
-3. **Stripe Edge Functions**: Despliegue de funciones serverless en Supabase para `create-payment-intent` y webhooks seguro sin exponer la clave secreta de Stripe.
+#### 🔴 BUG-01 (CRITICAL): International Locale Decimal Keypad Freeze
+* **Location:** [`TransferViewModel.swift:L115-L134, L144-L165`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/TransferViewModel.swift#L115-L134), [`CurrencyFormatter.swift:L28-L30`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Utility/CurrencyFormatter.swift#L28-L30)
+* **Mechanics:**
+  ```swift
+  // CurrencyFormatter.swift
+  static func plain(_ amount: Double) -> String {
+      return String(format: "%.2f", amount) // Uses device locale!
+  }
+
+  // TransferViewModel.swift
+  func appendDigit(_ digit: String) {
+      let currentAmountString = CurrencyFormatter.plain(amount)
+      let components = currentAmountString.split(separator: ".")
+      if components.count == 2 { ... } // Fails in comma locales!
+  }
+  ```
+  `String(format: "%.2f", amount)` formats using the device's current locale. In Spanish, German, French, or Italian locales, 1.50 is formatted as `"1,50"`. Splitting by `"."` produces `["1,50"]` (count = 1). `components.count == 2` evaluates to `false`.
+* **Impact:** On any iOS device configured with a comma-decimal locale, tapping numbers on the custom keypad has zero effect. The P2P transfer keypad is completely frozen.
+* **Remediation:** Replace string splitting with an integer cents model (`amountInCents: Int`):
+  ```swift
+  @Published var amountInCents: Int = 0
+  var amount: Double { Double(amountInCents) / 100.0 }
+
+  func appendDigit(_ digit: Int) {
+      guard amountInCents < 100_000_00 else { return } // $100k cap
+      amountInCents = amountInCents * 10 + digit
+  }
+
+  func deleteLastDigit() {
+      amountInCents /= 10
+  }
+  ```
 
 ---
 
-## 📌 RECOMENDACIÓN FINAL
+#### 🟠 BUG-02 (HIGH): IEEE 754 Floating-Point Precision in Financial Calculations
+* **Location:** [`PaymentManager.swift:L156-L178`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/PaymentManager.swift#L156-L178), [`AuthManager.swift:L154-L159`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/AuthManager.swift#L154-L159), [`User.swift:L20`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Model/User.swift#L20), [`Transaction.swift:L101`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Model/Transaction.swift#L101), [`ServicesViewModel.swift:L249-L265`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/ServicesViewModel.swift#L249-L265)
+* **Mechanics:**
+  Balances, payment deductions (`user.balance += delta`), and recurring aggregations use standard 64-bit floating-point `Double`. 
+* **Impact:** Inherent binary representation limits (`0.1 + 0.2 = 0.30000000000000004`) lead to accumulated precision loss, fractional cent discrepancies, and balance comparison failures in accounting workflows.
+* **Remediation:** Migrate domain models and financial operations to `Decimal` or `Int64` minor currency units (cents).
 
-Se debe prohibir cualquier despliegue a TestFlight o App Store hasta corregir los **6 Hallazgos CRÍTICOS** y **12 Hallazgos ALTOS**. Se debe ejecutar prioritariamente el plan de remediación en tres fases estipulado en [`.audit/ACTION_PLAN.md`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/.audit/ACTION_PLAN.md).
+---
+
+#### 🟠 BUG-03 (HIGH): Calendar Error Masked by Payment Success Alert
+* **Location:** [`ServicesViewModel.swift:L173-L197`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/ServicesViewModel.swift#L173-L197)
+* **Mechanics:**
+  In `payOneTimeBill()`, if calendar creation fails, `errorMessage` is set to `"Payment created but calendar event failed..."`. However, because the payment charge itself succeeded (`success == true`), the method sets `showingSuccess = true` and calls `resetForm()`.
+* **Impact:** The view triggers `.alert("Payment Successful")`, which suppresses and overwrites the calendar permission failure. The user believes their calendar reminder was set when it was silently dropped.
+* **Remediation:** Maintain distinct state flags (`showingSuccess`, `showingWarningMessage`, `calendarWarning`) so calendar errors are surfaced even when payment completes.
+
+---
+
+#### 🟡 BUG-04 (MEDIUM): Inconsistent App Name Branding Across UI and Constants
+* **Location:** [`Constants.swift:L96`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Config/Constants.swift#L96), [`LoginView.swift:L43, L49`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/LoginView.swift#L43), [`WalletView.swift:L216`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/WalletView.swift#L216), [`StripeManager.swift:L3`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/StripeManager.swift#L3)
+* **Mechanics:**
+  `AppConstants.AppInfo.name` is defined as `"PRPay"`. `LoginView` displays `"PR"` and `"PRPay"`. `WalletView` displays `"Add a payment method to start using PRPay"`.
+* **Impact:** Brand confusion where the app identity oscillates between PRPay and PocketPay.
+* **Remediation:** Standardize all branding constants and user strings to `PocketPay`.
+
+---
+
+#### 🟡 BUG-05 (MEDIUM): SwiftUI `.alert` with `.constant(...)` Binding Anti-Pattern
+* **Location:** [`ServicesView.swift:L86`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/ServicesView.swift#L86), [`AddPaymentView.swift:L129`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/AddPaymentView.swift#L129)
+* **Mechanics:**
+  ```swift
+  .alert("Payment Failed", isPresented: .constant(viewModel.errorMessage != nil)) {
+      Button("OK") { viewModel.errorMessage = nil }
+  }
+  ```
+  Passing `.constant` to `isPresented` violates SwiftUI two-way binding conventions.
+* **Impact:** Causes runtime warnings in Xcode console and can result in alert dismissal glitches when dismissed via system gestures.
+* **Remediation:** Use a computed `Binding<Bool>` or a `@Published var showError: Bool` on the ViewModel.
+
+---
+
+#### 🟢 BUG-06 (LOW): Dead State & Unobserved Variables
+* **Location:** [`LoginView.swift:L25, L156`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/LoginView.swift#L25), [`AddCardView.swift:L43-L44`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/AddCardView.swift#L43-L44), [`HomeView.swift:L18`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/HomeView.swift#L18), [`HomeViewModel.swift:L29-L31`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/HomeViewModel.swift#L29-L31)
+* **Mechanics:**
+  - `LoginView.showError` is assigned but never observed.
+  - `AddCardView.showingError` and `errorMessage` are never set or triggered.
+  - `HomeView.authManager` is instantiated as `@StateObject` but unused.
+  - `HomeViewModel.showingTransferView`, `showingHistoryView`, `showingScanQRView` are shadowed by local `@State` in `HomeView`.
+* **Impact:** Unnecessary memory overhead and developer confusion.
+* **Remediation:** Remove unused properties and consolidate sheet presentation state in ViewModels.
+
+---
+
+#### 🟢 BUG-07 (LOW): Deprecated View Modifiers in iOS 17+
+* **Location:** [`LoginView.swift:L197, L198, L224, L225`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/LoginView.swift#L197), [`AddPaymentView.swift:L28`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/AddPaymentView.swift#L28)
+* **Mechanics:**
+  - `.autocapitalization(...)` (Deprecated -> `.textInputAutocapitalization(...)`)
+  - `.disableAutocorrection(true)` (Deprecated -> `.autocorrectionDisabled()`)
+* **Impact:** Generates compiler warnings on modern Xcode builds.
+* **Remediation:** Update to modern iOS 17+ modifier syntax.
+
+---
+
+### 3. 🏗️ Architecture & State Management
+
+#### 🟠 ARC-01 (HIGH): Orphaned Views and Disconnected Navigation Hierarchy
+* **Location:** [`MainTabView.swift:L20-L44`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/MainTabView.swift#L20-L44), [`HomeView.swift:L62-L83, L108-L122`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/HomeView.swift#L62-L83)
+* **Mechanics:**
+  - `MainTabView` defines only 3 tabs: **Home (0)**, **Wallet (1)**, and **Profile (2)**.
+  - `ServicesView` (`Services & Bills` tab with full subscription manager, due-soon tracking, monthly cost breakdown, and calendar sync) is **completely omitted from `MainTabView`**.
+  - In `HomeView`, the "Pay Bill" button opens `AddPaymentView` directly, bypassing `ServicesView` entirely.
+  - `HistoryView` (`Transaction History` with date grouping, search, and category chips) is **omitted from `MainTabView`** and has no "See All" button or row navigation from `HomeView`.
+  - `ScanQRView` is orphaned with no trigger button.
+* **Impact:** Critical user-facing features (`ServicesView`, `HistoryView`, `TransactionDetailView`, `ScanQRView`) are completely inaccessible in the running application.
+* **Remediation:** Expand `MainTabView` to 4 or 5 tabs (e.g. Home, Services, Wallet, History, Profile) or add direct navigation links from `HomeView`'s Recent Transactions header.
+
+---
+
+#### 🟠 ARC-02 (HIGH): Non-Reactive Snapshot Polling in ViewModels
+* **Location:** [`HomeViewModel.swift:L40-L53`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/HomeViewModel.swift#L40-L53), [`HomeView.swift:L133-L135`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/HomeView.swift#L133-L135)
+* **Mechanics:**
+  `HomeViewModel` reads snapshots of `currentUser` and `recentTransactions` inside `init()` and relies exclusively on `HomeView.onAppear { viewModel.loadData() }`. It does not subscribe via Combine publishers to `AuthManager` or `PaymentManager`.
+* **Impact:** In multi-window iPadOS setups or when transfers complete in background sheets without re-triggering `onAppear`, home screen balance and transactions display stale data.
+* **Remediation:** Bind `HomeViewModel` properties to `AuthManager` and `PaymentManager` using Combine `$currentUser` / `$transactions` pipelines or the Swift Observation framework (`@Observable`).
+
+---
+
+#### 🟡 ARC-03 (MEDIUM): `@StateObject` Instantiation with Global Singletons
+* **Location:** [`WalletView.swift:L17`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/WalletView.swift#L17), [`HistoryView.swift:L16`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/HistoryView.swift#L16), [`HomeView.swift:L18`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/HomeView.swift#L18)
+* **Mechanics:**
+  `@StateObject private var viewModel = WalletViewModel.shared` initializes a `@StateObject` with a global singleton.
+* **Impact:** In SwiftUI, `@StateObject` manages object lifecycle ownership. Passing a global singleton breaks view testing isolation, SwiftUI preview mocking, and declarative view graph lifecycles.
+* **Remediation:** Use `@ObservedObject` for singleton references, or inject dependencies via `@EnvironmentObject` or constructor parameters.
+
+---
+
+#### 🟢 ARC-04 (LOW): Unused Root Dependency Declarations in `PocketPayApp`
+* **Location:** [`PocketPayApp.swift:L21-L33`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/App/PocketPayApp.swift#L21-L33)
+* **Mechanics:**
+  `PocketPayApp` declares `@StateObject private var paymentManager = PaymentManager.shared` but never passes it down into the SwiftUI hierarchy via `.environmentObject()`.
+* **Impact:** Misleading documentation and redundant state registration at app root.
+* **Remediation:** Either provide `.environmentObject(paymentManager)` or remove the unreferenced `@StateObject`.
+
+---
+
+### 4. ⚡ Performance & Memory
+
+#### 🟠 PRF-01 (HIGH): $O(N^2)$ Redundant Grouping and Sorting in `HistoryView.body`
+* **Location:** [`HistoryView.swift:L94-L106, L140-L144`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/HistoryView.swift#L94-L106)
+* **Mechanics:**
+  ```swift
+  private var groupedTransactions: [Date: [Transaction]] {
+      Dictionary(grouping: filteredTransactions) { transaction in
+          Calendar.current.startOfDay(for: transaction.date)
+      }
+  }
+
+  // Inside body:
+  ForEach(groupedTransactions.keys.sorted(by: >), id: \.self) { date in
+      Section {
+          ForEach(groupedTransactions[date] ?? []) { transaction in
+              ...
+              if transaction.id != groupedTransactions[date]?.last?.id { ... }
+          }
+      }
+  }
+  ```
+  `groupedTransactions` is a computed property. Evaluating `body` calls the getter repeatedly:
+  1. Once for `groupedTransactions.keys.sorted(by: >)` ($O(N \log N)$).
+  2. Once per section for `groupedTransactions[date]` ($K \times O(N)$).
+  3. Once per row for `groupedTransactions[date]?.last?.id` ($N \times O(N)$).
+* **Impact:** For a ledger of 100 transactions across 10 dates, rendering `body` executes over 100 redundant dictionary groupings and allocations on the Main Thread during scrolling, causing severe UI stuttering and frame drops.
+* **Remediation:** Move grouping logic into a ViewModel and cache the grouped structure:
+  ```swift
+  struct DateGroupedTransactions: Identifiable {
+      let id: Date
+      let transactions: [Transaction]
+  }
+  @Published var sections: [DateGroupedTransactions] = []
+  ```
+
+---
+
+#### 🟡 PRF-02 (MEDIUM): Dynamic `DateFormatter` Allocations in Views & Models
+* **Location:** [`RecurringPayment.swift:L128-L132`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Model/RecurringPayment.swift#L128-L132), [`HistoryView.swift:L157-L160`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/HistoryView.swift#L157-L160)
+* **Mechanics:**
+  `RecurringPayment.formattedNextPaymentDate` and `HistoryView.formatSectionDate` instantiate a new `DateFormatter()` on every single cell access and header rendering.
+* **Impact:** `DateFormatter` initialization involves expensive locale and timezone parsing. Doing this dynamically in list rows causes noticeable main thread latency.
+* **Remediation:** Make formatters `static let` constants, or use iOS 15+ formatted date styles (`date.formatted(date: .abbreviated, time: .omitted)`).
+
+---
+
+#### 🟢 PRF-03 (LOW): Redundant MainActor Dispatches
+* **Location:** [`LoginView.swift:L153, L170`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/LoginView.swift#L153), [`StripeManager.swift:L107, L118`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/StripeManager.swift#L107)
+* **Mechanics:**
+  Tasks started inside SwiftUI views already inherit `@MainActor` context. Calling `await MainActor.run { ... }` inside these tasks is redundant.
+* **Impact:** Micro-overhead of task hops.
+* **Remediation:** Remove superfluous `MainActor.run` blocks in view-attached tasks.
+
+---
+
+## 🛠️ Prioritized Action Plan
+
+| Priority | ID | Title | Target File | Severity |
+| :---: | :--- | :--- | :--- | :---: |
+| **P0** | **BUG-01** | Fix International Locale Decimal Keypad Freeze | [`TransferViewModel.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/TransferViewModel.swift) | 🔴 CRITICAL |
+| **P0** | **SEC-01** | Replace Mock Credentials with Backend JWT Auth | [`AuthManager.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/AuthManager.swift) | 🔴 CRITICAL |
+| **P0** | **SEC-02** | Implement Server-Side Stripe PaymentSheet | [`StripeManager.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/StripeManager.swift) | 🔴 CRITICAL |
+| **P1** | **ARC-01** | Connect `ServicesView` and `HistoryView` to `MainTabView` | [`MainTabView.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/MainTabView.swift) | 🟠 HIGH |
+| **P1** | **SEC-03** | Bind Biometrics to Keychain `SecAccessControl` | [`AuthManager.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Core/AuthManager.swift) | 🟠 HIGH |
+| **P1** | **PRF-01** | Cache Grouped Transactions in History ViewModel | [`HistoryView.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/HistoryView.swift) | 🟠 HIGH |
+| **P1** | **ARC-02** | Bind `HomeViewModel` via Combine Publishers | [`HomeViewModel.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/HomeViewModel.swift) | 🟠 HIGH |
+| **P1** | **BUG-03** | Fix Calendar Error Alert Masking in Services | [`ServicesViewModel.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/ViewModel/ServicesViewModel.swift) | 🟠 HIGH |
+| **P2** | **BUG-02** | Refactor Floating-Point Balances to Integer Cents | Global (`User`, `Transaction`, `PaymentManager`) | 🟠 HIGH |
+| **P2** | **PRF-02** | Convert `DateFormatter` to Static Singletons | [`RecurringPayment.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Model/RecurringPayment.swift) | 🟡 MEDIUM |
+| **P2** | **BUG-04** | Fix PRPay Branding Inconsistencies | [`Constants.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/Config/Constants.swift), [`LoginView.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/LoginView.swift) | 🟡 MEDIUM |
+| **P2** | **BUG-05** | Eliminate `.constant` SwiftUI Alert Bindings | [`ServicesView.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/ServicesView.swift) | 🟡 MEDIUM |
+| **P3** | **BUG-06** | Remove Dead State and Unused `@StateObject` | Views (`LoginView`, `AddCardView`, `HomeView`) | 🟢 LOW |
+| **P3** | **BUG-07** | Modernize Deprecated Text Modifiers for iOS 17+ | [`LoginView.swift`](file:///Users/eduardotorres/Developer/XCodes/PocketPay/PocketPay/View/LoginView.swift) | 🟢 LOW |

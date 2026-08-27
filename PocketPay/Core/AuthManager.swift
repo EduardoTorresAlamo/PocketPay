@@ -109,7 +109,16 @@ class AuthManager: ObservableObject, AuthManaging {
             )
 
             if success {
-                // Load saved user or use mock user
+                // Verify device has biometrics configured
+                guard context.biometryType != .none else {
+                    errorMessage = "Biometrics not configured on this device."
+                    return false
+                }
+                // Load user (persisted via KeychainUserRepository with
+                // kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly). In production the
+                // Keychain item backing the auth token should be created with the
+                // Secure-Enclave-bound access control from `biometryAccessControl()` so
+                // that the token can only be read after a live biometric challenge.
                 let user = userRepository.load() ?? User.mockUser
                 currentUser = user
                 isAuthenticated = true
@@ -167,6 +176,28 @@ class AuthManager: ObservableObject, AuthManaging {
     }
 
     // MARK: - Helper Methods
+
+    /// Builds a `SecAccessControl` that binds a Keychain item to the Secure Enclave.
+    ///
+    /// The `.biometryCurrentSet` flag invalidates the item whenever the enrolled
+    /// biometric set changes (a finger/face added or removed), and
+    /// `kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly` requires a device passcode
+    /// and prevents the item from migrating to another device via backup. In
+    /// production, auth tokens should be stored under this access control so a
+    /// successful biometric evaluation is required before they can be read.
+    private static func biometryAccessControl() -> SecAccessControl? {
+        var error: Unmanaged<CFError>?
+        let access = SecAccessControlCreateWithFlags(
+            nil,
+            kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+            .biometryCurrentSet,
+            &error
+        )
+        if error != nil {
+            print("Failed to create access control: \(error!.takeRetainedValue() as Error)")
+        }
+        return access
+    }
 
     /// A human-readable name for the biometric type available on this device.
     ///
