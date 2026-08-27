@@ -122,6 +122,9 @@ struct HomeView: View {
                 }
             }
             .padding(.bottom, 24)
+            .onAppear {
+                viewModel.loadData()
+            }
         }
         .background(AppConstants.Colors.background.ignoresSafeArea())
         .sheet(isPresented: $showingTransferView) {
@@ -129,9 +132,6 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showingPayBillView) {
             AddPaymentView(viewModel: ServicesViewModel())
-        }
-        .onAppear {
-            viewModel.loadData()
         }
     }
 }
